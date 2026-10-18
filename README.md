@@ -27,7 +27,7 @@ En un clon limpio, compila el frontend una vez (`wails build` o `pnpm --dir fron
 | `main.go` | Punto de entrada: embebe el frontend y llama a `desktop.Run` |
 | `internal/desktop/` | Único paquete que conoce Wails (adaptador) |
 | `frontend/` | UI Vue 3 + TS (Vite) |
-| `docs/` | ADRs, planes por fase y resumen de la Fase 0 |
+| `docs/` | Decisiones de arquitectura (ADR) |
 
 ## Licencia
 
