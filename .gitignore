@@ -31,3 +31,13 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Wails / frontend
+build/bin/
+node_modules/
+frontend/dist/
+frontend/package.json.md5
+
+# Local data
+*.db
+*.db-*
