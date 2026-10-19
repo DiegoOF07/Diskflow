@@ -1,5 +1,7 @@
 # DiskFlow
 
+[![CI](https://github.com/DiegoOF07/Diskflow/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoOF07/Diskflow/actions/workflows/ci.yml)
+
 Auditor visual de almacenamiento para espacios de trabajo de desarrollo. Analiza las carpetas que eliges y explica cómo se reparte su espacio (proyectos, dependencias, artefactos de compilación…) **sin modificar tus archivos**.
 
 > Estado: en desarrollo (Fase 1). Plataforma inicial: Windows 10/11 x64.
