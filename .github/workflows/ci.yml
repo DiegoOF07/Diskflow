@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l internal main.go)
+          if [ -n "$unformatted" ]; then
+            echo "Files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      # ./internal/... only: package main embeds frontend/dist, built in the frontend job.
+      - name: go vet
+        run: go vet ./internal/...
+
+      - name: go test
+        if: runner.os == 'Windows'
+        run: go test ./internal/...
+
+      # The race detector needs cgo, available out of the box on Linux runners.
+      - name: go test -race
+        if: runner.os == 'Linux'
+        run: go test -race ./internal/...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs pnpm (version from package.json "packageManager") and Node, then runs pnpm install.
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@26
+          working-directory: frontend
+          cache: true
+
+      - name: Type-check and build
+        run: pnpm run build
