@@ -257,3 +257,22 @@ func ExampleIsPatch() {
 	// true
 	// false
 }
+
+func TestWalkSkipsExcludedDirs(t *testing.T) {
+	dir, _ := generate(t, fixture.Spec{Entries: 200, FanOut: 3, Seed: 1})
+	excluded := filepath.Join(dir, "d01")
+	got := collect(t, dir, Options{Skip: func(path string) bool { return path == excluded }})
+
+	topLevel := map[string]bool{} // names repeat at deeper levels, so look only under the root
+	for _, e := range got {
+		if e.ParentID == 1 {
+			topLevel[e.Name] = true
+		}
+	}
+	if topLevel["d01"] {
+		t.Fatal("excluded dir was emitted")
+	}
+	if !topLevel["d00"] || !topLevel["d02"] {
+		t.Fatal("sibling dirs must still be walked")
+	}
+}

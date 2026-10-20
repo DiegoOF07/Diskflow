@@ -23,6 +23,9 @@ var ErrNotDir = errors.New("scan: root is not a directory")
 type Options struct {
 	Workers   int // goroutines reading directories (default: CPUs, at most 8)
 	MaxQueued int // capacity of the shared directory queue (default 1024)
+	// Skip, if set, is called with the full path of each directory found below
+	// the root; returning true omits that directory and everything inside it.
+	Skip func(path string) bool
 }
 
 // beforeReadDir is a test hook called right before a directory is read.
@@ -176,6 +179,9 @@ func (w *walker) process(d dirItem, local *[]dirItem) {
 	// On error ReadDir still returns the entries read so far; keep them.
 	entries, readErr := os.ReadDir(d.path)
 	for _, de := range entries {
+		if de.IsDir() && w.opts.Skip != nil && w.opts.Skip(filepath.Join(d.path, de.Name())) {
+			continue
+		}
 		e := model.Entry{ID: w.nextID.Add(1), ParentID: d.id, Name: de.Name(), Kind: kindOf(de.Type())}
 		if info, err := de.Info(); err != nil {
 			e.Err = errCode(err) // e.g. deleted between ReadDir and Info
