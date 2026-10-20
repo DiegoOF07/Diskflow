@@ -18,6 +18,7 @@ Requisitos: Go 1.27+, Node 26+, pnpm 11+, [Wails CLI v2](https://wails.io/docs/g
 wails dev     # app con recarga en caliente
 wails build   # binario en build/bin/diskflow.exe
 go test ./... # pruebas del backend
+pnpm --dir frontend test   # pruebas del frontend (Vitest)
 ```
 
 ### CLI de desarrollo
@@ -40,7 +41,9 @@ En un clon limpio, compila el frontend una vez (`wails build` o `pnpm --dir fron
 | `internal/engine/` | Motor de escaneo e índice SQLite, sin dependencias de la UI |
 | `internal/desktop/` | Único paquete que conoce Wails (adaptador) |
 | `cmd/diskflow-cli/` | CLI de desarrollo sobre el motor |
-| `frontend/` | UI Vue 3 + TS (Vite) |
+| `frontend/src/backend/` | Interfaz `Backend` que usa la UI y su implementación sobre Wails |
+| `frontend/src/features/` | Pantallas de la UI, Vue 3 + TS (Vite) |
+| `frontend/wailsjs/` | Bindings generados por Wails (no editar) |
 | `docs/` | Decisiones de arquitectura (ADR) |
 
 ## Licencia

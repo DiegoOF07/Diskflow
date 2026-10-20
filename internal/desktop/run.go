@@ -20,6 +20,7 @@ func Run(assets fs.FS) error {
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 		OnStartup:        app.startup,
+		OnShutdown:       app.shutdown,
 		Bind:             []any{app},
 	})
 }
