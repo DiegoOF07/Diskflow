@@ -6,6 +6,13 @@
   "frontend:build": "pnpm run build",
   "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "auto",
+  "info": {
+    "companyName": "DiskFlow",
+    "productName": "DiskFlow",
+    "productVersion": "0.0.0",
+    "copyright": "Copyright (c) 2026 Diego Oswaldo Flores Rivas",
+    "comments": "Auditor visual de almacenamiento para espacios de desarrollo"
+  },
   "author": {
     "name": "Diego Flores",
     "email": "floresdiego041@gmail.com"
