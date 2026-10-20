@@ -1,0 +1,61 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the Windows binaries and publishes them as a
+# GitHub Release. Tags with a suffix (v0.1.0-rc.1) are marked as prereleases.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # create the release and upload its files
+
+jobs:
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@26
+          working-directory: frontend
+          cache: true
+
+      # The CLI version matches the wails module in go.mod.
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
+
+      - name: Install NSIS
+        run: |
+          choco install nsis --yes --no-progress
+          echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+
+      # NSIS and the .exe metadata only accept numeric versions: v0.1.0-rc.1 -> 0.1.0.
+      - name: Set version from tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          jq --arg v "${version%%-*}" '.info.productVersion = $v' wails.json > wails.tmp && mv wails.tmp wails.json
+
+      - name: Build
+        run: wails build -clean -nsis -trimpath
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir dist
+          cp build/bin/diskflow.exe "dist/diskflow-$VERSION-windows-amd64.exe"
+          cp build/bin/*-installer.exe "dist/diskflow-$VERSION-windows-amd64-installer.exe"
+          (cd dist && sha256sum -- *.exe > SHA256SUMS.txt)
+          prerelease=""
+          [[ "$VERSION" == *-* ]] && prerelease="--prerelease"
+          gh release create "$GITHUB_REF_NAME" dist/* --title "DiskFlow $VERSION" --generate-notes $prerelease

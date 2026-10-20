@@ -19,7 +19,25 @@ wails dev     # app con recarga en caliente
 wails build   # binario en build/bin/diskflow.exe
 go test ./... # pruebas del backend
 pnpm --dir frontend test   # pruebas del frontend (Vitest)
+pnpm --dir frontend lint   # ESLint (pnpm --dir frontend format aplica Prettier)
 ```
+
+### Publicar una versión
+
+Al subir un tag `v*`, el workflow `release` compila en Windows y publica en GitHub Releases el `.exe` portable y el instalador NSIS. Un tag con sufijo (`v0.1.0-rc.1`) se publica como *prerelease*.
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Cada release incluye `SHA256SUMS.txt`. Para comprobar que la descarga llegó íntegra, compara el hash del archivo con el de esa lista:
+
+```powershell
+Get-FileHash .\diskflow-0.1.0-windows-amd64.exe -Algorithm SHA256
+```
+
+Los binarios no están firmados, así que Windows SmartScreen mostrará un aviso la primera vez que se ejecuten.
 
 ### CLI de desarrollo
 

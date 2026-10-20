@@ -47,7 +47,9 @@ const kindClass = (n: Node) => (n.id === OTHERS_ID ? 'others' : n.kind)
         @click="r.node.kind === 'dir' && emit('open', r.node)"
       >
         <rect :x="r.x0" :y="r.y0" :width="r.x1 - r.x0" :height="r.y1 - r.y0" />
-        <title>{{ r.node.name }} — {{ formatBytes(r.node.size) }} ({{ formatPercent(r.node.size, parentSize) }})</title>
+        <title>
+          {{ r.node.name }} — {{ formatBytes(r.node.size) }} ({{ formatPercent(r.node.size, parentSize) }})
+        </title>
         <template v-if="r.y1 - r.y0 > 18">
           <text :x="r.x0 + 4" :y="r.y0 + 15">{{ fitLabel(r.node.name, r.x1 - r.x0) }}</text>
           <text v-if="r.y1 - r.y0 > 36" class="size" :x="r.x0 + 4" :y="r.y0 + 30">
@@ -60,16 +62,48 @@ const kindClass = (n: Node) => (n.id === OTHERS_ID ? 'others' : n.kind)
 </template>
 
 <style scoped>
-.treemap { width: 100%; margin: 8px 0 12px; }
-svg { display: block; }
-rect { stroke: var(--bg); stroke-width: 1; }
-text { font-size: 12px; pointer-events: none; fill: var(--fg); }
-text.size { opacity: 0.8; }
-.cell.dir rect { fill: var(--cell-dir); cursor: pointer; }
-.cell.dir text { fill: #fff; }
-.cell.file rect { fill: var(--cell-file); }
-.cell.link rect, .cell.other rect { fill: var(--cell-other); }
-.cell.others rect { fill: var(--cell-others); }
-.cell.active rect { stroke: var(--fg); stroke-width: 2; }
-.cell.dir.active rect, .cell.dir:hover rect { fill: var(--cell-dir-hover); }
+.treemap {
+  width: 100%;
+  margin: 8px 0 12px;
+}
+svg {
+  display: block;
+}
+rect {
+  stroke: var(--bg);
+  stroke-width: 1;
+}
+text {
+  font-size: 12px;
+  pointer-events: none;
+  fill: var(--fg);
+}
+text.size {
+  opacity: 0.8;
+}
+.cell.dir rect {
+  fill: var(--cell-dir);
+  cursor: pointer;
+}
+.cell.dir text {
+  fill: #fff;
+}
+.cell.file rect {
+  fill: var(--cell-file);
+}
+.cell.link rect,
+.cell.other rect {
+  fill: var(--cell-other);
+}
+.cell.others rect {
+  fill: var(--cell-others);
+}
+.cell.active rect {
+  stroke: var(--fg);
+  stroke-width: 2;
+}
+.cell.dir.active rect,
+.cell.dir:hover rect {
+  fill: var(--cell-dir-hover);
+}
 </style>

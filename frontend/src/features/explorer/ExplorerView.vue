@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
 import { formatBytes, formatCount, formatPercent } from './format'
-import Treemap from './treemap/Treemap.vue'
+import TreemapChart from './treemap/TreemapChart.vue'
 import { PAGE_SIZE, useExplorer } from './useExplorer'
 
 const ex = useExplorer(useBackend())
@@ -20,11 +20,11 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
       <button type="button" :disabled="scanning" @click="ex.pickFolder">Elegir carpeta</button>
       <button type="button" class="primary" :disabled="!root || scanning" @click="ex.scan">Analizar</button>
       <button type="button" :disabled="!scanning" @click="ex.cancel">Cancelar</button>
-      <code v-if="root" class="root" :title="root ?? ''">{{ root ?? 'Ninguna carpeta elegida' }}</code>
+      <code v-if="root" class="root" :title="root">{{ root }}</code>
     </header>
 
     <div v-if="!root" class="empty-card">
-      <code class="empty-message" :title="root ?? ''">{{ root ?? 'Ninguna carpeta elegida' }}</code>
+      <code class="empty-message" title="Sin contenido por ver">Ninguna carpeta elegida</code>
     </div>
 
     <p class="status" aria-live="polite">
@@ -48,15 +48,22 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
 
     <nav v-if="trail.length" class="crumbs" aria-label="Ruta">
       <template v-for="(n, i) in trail" :key="n.id">
-        <button type="button" class="link" :aria-current="i === trail.length - 1 ? 'page' : undefined" @click="ex.goTo(i)">
+        <button
+          type="button"
+          class="link"
+          :aria-current="i === trail.length - 1 ? 'page' : undefined"
+          @click="ex.goTo(i)"
+        >
           {{ n.name }}
         </button>
         <span v-if="i < trail.length - 1" aria-hidden="true">›</span>
       </template>
-      <span class="total" v-if="current">{{ formatBytes(current.size) }} · {{ formatCount(current.files) }} archivos</span>
+      <span v-if="current" class="total"
+        >{{ formatBytes(current.size) }} · {{ formatCount(current.files) }} archivos</span
+      >
     </nav>
 
-    <Treemap
+    <TreemapChart
       v-if="current && children.length"
       :nodes="children"
       :parent-size="current.size"
@@ -83,7 +90,9 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
           @mouseleave="hovered = null"
         >
           <td class="name">
-            <button v-if="n.kind === 'dir'" type="button" class="link" @click="ex.open(n)">📁 {{ n.name }}</button>
+            <button v-if="n.kind === 'dir'" type="button" class="link" @click="ex.open(n)">
+              📁 {{ n.name }}
+            </button>
             <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
             <span v-if="n.err" class="badge" :title="n.err">sin acceso</span>
           </td>
@@ -102,25 +111,108 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
 </template>
 
 <style scoped>
-.explorer { padding: 16px 20px; }
-.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.root { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
-.status { min-height: 1.4em; color: var(--muted); margin: 10px 0; }
-.error { background: var(--danger-bg); color: var(--danger); padding: 8px 12px; border-radius: 6px; }
-.empty { color: var(--muted); }
-.empty-card { display: flex; align-items: center; justify-content: center; height: 85dvh; width: 100%; color: var(--muted); }
-.empty-message { font-size: 14px; text-align: center; margin: 5rem;}
-.crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-.crumbs [aria-current] { font-weight: 600; }
-.total { margin-left: auto; color: var(--muted); }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
-th { font-weight: 600; color: var(--muted); }
-tr.hovered { background: var(--row-hover); }
-.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.name { word-break: break-all; }
-.share { position: relative; width: 160px; }
-.bar { position: absolute; inset: 4px auto 4px 0; background: var(--accent-soft); border-radius: 3px; }
-.pct { position: relative; }
-.badge { margin-left: 8px; font-size: 11px; color: var(--danger); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.explorer {
+  padding: 16px 20px;
+}
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.root {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.status {
+  min-height: 1.4em;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+.empty {
+  color: var(--muted);
+}
+.empty-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 85dvh;
+  width: 100%;
+  color: var(--muted);
+}
+.empty-message {
+  font-size: 14px;
+  text-align: center;
+  margin: 5rem;
+}
+.crumbs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.crumbs [aria-current] {
+  font-weight: 600;
+}
+.total {
+  margin-left: auto;
+  color: var(--muted);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+th {
+  font-weight: 600;
+  color: var(--muted);
+}
+tr.hovered {
+  background: var(--row-hover);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.name {
+  word-break: break-all;
+}
+.share {
+  position: relative;
+  width: 160px;
+}
+.bar {
+  position: absolute;
+  inset: 4px auto 4px 0;
+  background: var(--accent-soft);
+  border-radius: 3px;
+}
+.pct {
+  position: relative;
+}
+.badge {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--danger);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 4px;
+}
 </style>
