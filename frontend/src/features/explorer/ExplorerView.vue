@@ -24,7 +24,7 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
     </header>
 
     <div v-if="!root" class="empty-card">
-      <code class="empty-message" :title="'Sin contenido por ver'">{{ root ?? 'Ninguna carpeta elegida' }}</code>
+      <code class="empty-message" title="Sin contenido por ver">Ninguna carpeta elegida</code>
     </div>
 
     <p class="status" aria-live="polite">
