@@ -7,6 +7,12 @@
   --accent-soft: rgba(9, 105, 218, 0.15);
   --danger: #b42318;
   --danger-bg: #fdecea;
+  --row-hover: #f3f6fa;
+  --cell-dir: #3d7bd9;
+  --cell-dir-hover: #2a62b8;
+  --cell-file: #b8c2cc;
+  --cell-other: #d6dbe1;
+  --cell-others: #e8ebef;
   font-family: system-ui, 'Segoe UI', sans-serif;
   font-size: 14px;
 }
