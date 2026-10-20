@@ -7,7 +7,13 @@ import { useExplorer } from './useExplorer'
 const ROOT = 'C:\\work'
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const summary = (status: Summary['status']): Summary => ({
-  scanId: 1, status, elapsedMs: 10, files: 2, dirs: 1, bytes: 300, errors: 0,
+  scanId: 1,
+  status,
+  elapsedMs: 10,
+  files: 2,
+  dirs: 1,
+  bytes: 300,
+  errors: 0,
 })
 
 let backend: FakeBackend

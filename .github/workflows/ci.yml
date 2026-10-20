@@ -68,6 +68,12 @@ jobs:
           working-directory: frontend
           cache: true
 
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Format
+        run: pnpm run format:check
+
       - name: Unit tests
         run: pnpm test
 
