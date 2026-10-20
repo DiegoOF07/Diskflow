@@ -68,5 +68,8 @@ jobs:
           working-directory: frontend
           cache: true
 
+      - name: Unit tests
+        run: pnpm test
+
       - name: Type-check and build
         run: pnpm run build
