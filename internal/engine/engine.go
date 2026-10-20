@@ -170,6 +170,19 @@ func (e *Engine) TopDirs(root string, limit int) ([]model.Node, error) {
 	return e.st.TopDirs(context.Background(), id, limit)
 }
 
+// Path returns the absolute path of entry id in the active index of root.
+func (e *Engine) Path(root string, id int64) (string, error) {
+	scanID, err := e.activeScan(root)
+	if err != nil {
+		return "", err
+	}
+	names, err := e.st.Path(context.Background(), scanID, id)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(names...), nil
+}
+
 func (e *Engine) activeScan(root string) (int64, error) {
 	key, err := rootKey(root, caseInsensitiveFS)
 	if err != nil {

@@ -34,23 +34,23 @@ jobs:
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l internal main.go)
+          unformatted=$(gofmt -l internal cmd main.go)
           if [ -n "$unformatted" ]; then
             echo "Files need gofmt:"; echo "$unformatted"; exit 1
           fi
 
-      # ./internal/... only: package main embeds frontend/dist, built in the frontend job.
+      # Not ./...: the root package embeds frontend/dist, built in the frontend job.
       - name: go vet
-        run: go vet ./internal/...
+        run: go vet ./internal/... ./cmd/...
 
       - name: go test
         if: runner.os == 'Windows'
-        run: go test ./internal/...
+        run: go test ./internal/... ./cmd/...
 
       # The race detector needs cgo, available out of the box on Linux runners.
       - name: go test -race
         if: runner.os == 'Linux'
-        run: go test -race ./internal/...
+        run: go test -race ./internal/... ./cmd/...
 
   frontend:
     name: Frontend

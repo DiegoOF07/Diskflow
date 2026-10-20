@@ -54,6 +54,38 @@ func (s *Store) TopDirs(ctx context.Context, scanID int64, limit int) ([]model.N
 		scanID, model.KindDir, clampLimit(limit))
 }
 
+// Path returns the names from the root down to entry id. Joining them is left
+// to the caller, which knows the OS path rules.
+func (s *Store) Path(ctx context.Context, scanID, id int64) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		WITH RECURSIVE up(id, parent_id, name, depth) AS (
+			SELECT id, parent_id, name, 0 FROM entries WHERE scan_id = ?1 AND id = ?2
+			UNION ALL
+			SELECT e.id, e.parent_id, e.name, up.depth + 1
+			FROM entries e JOIN up ON e.scan_id = ?1 AND e.id = up.parent_id
+		)
+		SELECT name FROM up ORDER BY depth DESC`, scanID, id)
+	if err != nil {
+		return nil, fmt.Errorf("store: path: %w", err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("store: path: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: path: %w", err)
+	}
+	if len(names) == 0 {
+		return nil, ErrNotFound
+	}
+	return names, nil
+}
+
 const nodeColumns = "id, name, kind, size, files, err"
 
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
