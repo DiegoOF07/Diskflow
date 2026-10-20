@@ -285,3 +285,21 @@ func TestCloseCancelsRunningScan(t *testing.T) {
 		t.Fatalf("status after Close = %q", sum.Status)
 	}
 }
+
+func TestPathPointsToTheRealDirectory(t *testing.T) {
+	e := newEngine(t)
+	dir, _ := generate(t, 500)
+	scanToEnd(t, e, dir)
+
+	top, err := e.TopDirs(dir, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := e.Path(dir, top[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() || filepath.Base(path) != top[0].Name {
+		t.Fatalf("Path = %q (stat err %v), want an existing dir named %q", path, err, top[0].Name)
+	}
+}

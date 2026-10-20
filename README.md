@@ -20,6 +20,16 @@ wails build   # binario en build/bin/diskflow.exe
 go test ./... # pruebas del backend
 ```
 
+### CLI de desarrollo
+
+Prueba y mide el motor sin la interfaz (los flags van antes de la ruta; Ctrl+C cancela el escaneo):
+
+```powershell
+go run ./cmd/diskflow-cli gen --out C:\tmp\arbol --entries 100000   # árbol sintético
+go run ./cmd/diskflow-cli scan --db dev.db C:\tmp\arbol              # escanea y mide
+go run ./cmd/diskflow-cli top --db dev.db --limit 10 C:\tmp\arbol    # directorios más grandes
+```
+
 En un clon limpio, compila el frontend una vez (`wails build` o `pnpm --dir frontend build`) antes de `go vet ./...`: `main.go` embebe `frontend/dist`.
 
 ## Estructura
@@ -27,7 +37,9 @@ En un clon limpio, compila el frontend una vez (`wails build` o `pnpm --dir fron
 | Ruta | Contenido |
 |---|---|
 | `main.go` | Punto de entrada: embebe el frontend y llama a `desktop.Run` |
+| `internal/engine/` | Motor de escaneo e índice SQLite, sin dependencias de la UI |
 | `internal/desktop/` | Único paquete que conoce Wails (adaptador) |
+| `cmd/diskflow-cli/` | CLI de desarrollo sobre el motor |
 | `frontend/` | UI Vue 3 + TS (Vite) |
 | `docs/` | Decisiones de arquitectura (ADR) |
 

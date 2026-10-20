@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
@@ -257,5 +258,34 @@ func TestSetDirTotalsKeepsErrWhenEmpty(t *testing.T) {
 	}
 	if got["locked"] != model.ErrAccessDenied || got["gone"] != model.ErrNotFound {
 		t.Fatalf("errors = %v", got)
+	}
+}
+
+func TestPathWalksUpToTheRoot(t *testing.T) {
+	s, _ := openTemp(t)
+	id, _ := s.BeginScan(ctx, "/r")
+	s.InsertEntries(ctx, id, []model.Entry{
+		{ID: 1, Name: "/r", Kind: model.KindDir},
+		{ID: 2, ParentID: 1, Name: "a", Kind: model.KindDir},
+		{ID: 3, ParentID: 2, Name: "b", Kind: model.KindDir},
+		{ID: 4, ParentID: 3, Name: "c.txt", Kind: model.KindFile},
+	})
+	for _, tt := range []struct {
+		id   int64
+		want []string
+	}{
+		{1, []string{"/r"}},
+		{4, []string{"/r", "a", "b", "c.txt"}},
+	} {
+		got, err := s.Path(ctx, id, tt.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("Path(%d) = %q, want %q", tt.id, got, tt.want)
+		}
+	}
+	if _, err := s.Path(ctx, id, 99); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Path of unknown entry: err = %v, want ErrNotFound", err)
 	}
 }
