@@ -1,69 +1,101 @@
 # DiskFlow
 
 [![CI](https://github.com/DiegoOF07/Diskflow/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoOF07/Diskflow/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Auditor visual de almacenamiento para espacios de trabajo de desarrollo. Analiza las carpetas que eliges y explica cómo se reparte su espacio (proyectos, dependencias, artefactos de compilación…) **sin modificar tus archivos**.
+**English** · [Español](README.es.md)
 
-> Estado: en desarrollo (Fase 1). Plataforma inicial: Windows 10/11 x64.
+DiskFlow is a visual storage auditor for development workspaces. Point it at a folder and it shows where the space goes (projects, dependencies, build artifacts) through a treemap and a sortable table, **without ever modifying your files**.
 
-## Stack
+> **Status:** early development (`v0.1`). Windows 10/11 x64 only for now. The user interface is in Spanish.
 
-Go 1.27 · Wails v2 · Vue 3 + TypeScript · SQLite (`modernc.org/sqlite`).
+## Features
 
-## Desarrollo
+- **Fast concurrent scanning** with live progress and cancellation. The engine indexed ~100k entries in about 2.4 s on NTFS while using under 10 MB of heap.
+- **Treemap and table side by side.** Hovering in one highlights the item in the other, and you can drill down into any folder.
+- **Local index.** Results are stored in SQLite, so you can browse the last scan without rescanning.
+- **Read-only by design.** DiskFlow never deletes, moves or opens your files, and it makes no network requests.
 
-Requisitos: Go 1.27+, Node 26+, pnpm 11+, [Wails CLI v2](https://wails.io/docs/gettingstarted/installation).
+## Installation
 
-```powershell
-wails dev     # app con recarga en caliente
-wails build   # binario en build/bin/diskflow.exe
-go test ./... # pruebas del backend
-pnpm --dir frontend test   # pruebas del frontend (Vitest)
-pnpm --dir frontend lint   # ESLint (pnpm --dir frontend format aplica Prettier)
-```
+Download the latest build from [Releases](https://github.com/DiegoOF07/Diskflow/releases):
 
-### Publicar una versión
-
-Al subir un tag `v*`, el workflow `release` compila en Windows y publica en GitHub Releases el `.exe` portable y el instalador NSIS. Un tag con sufijo (`v0.1.0-rc.1`) se publica como *prerelease*.
-
-```powershell
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Cada release incluye `SHA256SUMS.txt`. Para comprobar que la descarga llegó íntegra, compara el hash del archivo con el de esa lista:
-
-```powershell
-Get-FileHash .\diskflow-0.1.0-windows-amd64.exe -Algorithm SHA256
-```
-
-Los binarios no están firmados, así que Windows SmartScreen mostrará un aviso la primera vez que se ejecuten.
-
-### CLI de desarrollo
-
-Prueba y mide el motor sin la interfaz (los flags van antes de la ruta; Ctrl+C cancela el escaneo):
-
-```powershell
-go run ./cmd/diskflow-cli gen --out C:\tmp\arbol --entries 100000   # árbol sintético
-go run ./cmd/diskflow-cli scan --db dev.db C:\tmp\arbol              # escanea y mide
-go run ./cmd/diskflow-cli top --db dev.db --limit 10 C:\tmp\arbol    # directorios más grandes
-```
-
-En un clon limpio, compila el frontend una vez (`wails build` o `pnpm --dir frontend build`) antes de `go vet ./...`: `main.go` embebe `frontend/dist`.
-
-## Estructura
-
-| Ruta | Contenido |
+| File | Description |
 |---|---|
-| `main.go` | Punto de entrada: embebe el frontend y llama a `desktop.Run` |
-| `internal/engine/` | Motor de escaneo e índice SQLite, sin dependencias de la UI |
-| `internal/desktop/` | Único paquete que conoce Wails (adaptador) |
-| `cmd/diskflow-cli/` | CLI de desarrollo sobre el motor |
-| `frontend/src/backend/` | Interfaz `Backend` que usa la UI y su implementación sobre Wails |
-| `frontend/src/features/` | Pantallas de la UI, Vue 3 + TS (Vite) |
-| `frontend/wailsjs/` | Bindings generados por Wails (no editar) |
-| `docs/` | Decisiones de arquitectura (ADR) |
+| `diskflow-<version>-windows-amd64-installer.exe` | Installer, which adds Start menu and desktop shortcuts (recommended) |
+| `diskflow-<version>-windows-amd64.exe` | Portable executable |
+| `SHA256SUMS.txt` | Checksums to verify the downloads |
 
-## Licencia
+To check that a download is intact, compare its hash with the one listed in `SHA256SUMS.txt`:
 
-MIT
+```powershell
+Get-FileHash .\diskflow-<version>-windows-amd64-installer.exe -Algorithm SHA256
+```
+
+The binaries are not code-signed yet, so Windows SmartScreen will show a warning the first time you run them, and Smart App Control may block the portable executable. If that happens, use the installer.
+
+The scan index is stored in `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
+
+## Known limitations
+
+- **Sizes are logical, not on-disk.** Sparse, compressed and cloud-only (OneDrive) files are counted at their full logical size, so totals can exceed the real disk usage. On-disk size is planned for `v0.2`.
+- Only Windows is supported for now.
+
+## Roadmap
+
+- **v0.2:** on-disk sizes, saved folders, search, "Show in Explorer" and "Copy path", and clearer error states.
+- **Later:** user-defined exclusions, file-type categories and export to JSON/CSV.
+
+## Building from source
+
+**Requirements:** Go 1.27+, Node 26+, pnpm 11+ and the [Wails CLI v2](https://wails.io/docs/gettingstarted/installation). Building the installer also needs [NSIS](https://nsis.sourceforge.io/).
+
+```powershell
+wails dev                  # run the app with hot reload
+wails build                # build build/bin/diskflow.exe
+go test ./...              # backend tests
+pnpm --dir frontend test   # frontend tests (Vitest)
+pnpm --dir frontend lint   # ESLint; `pnpm --dir frontend format` applies Prettier
+```
+
+In a fresh clone, build the frontend once (`wails build` or `pnpm --dir frontend build`) before running `go vet ./...`, because `main.go` embeds `frontend/dist`.
+
+### Developer CLI
+
+`diskflow-cli` exercises the scan engine without the UI. Flags go before the path, and Ctrl+C cancels a scan.
+
+```powershell
+go run ./cmd/diskflow-cli gen --out C:\tmp\tree --entries 100000   # generate a synthetic tree
+go run ./cmd/diskflow-cli scan --db dev.db C:\tmp\tree              # scan it and report timings
+go run ./cmd/diskflow-cli top --db dev.db --limit 10 C:\tmp\tree    # list the largest directories
+```
+
+### Releasing
+
+Pushing a `v*` tag runs the `release` workflow, which builds on Windows and publishes the portable executable, the installer and `SHA256SUMS.txt` to GitHub Releases. Tags with a suffix (`v0.2.0-rc.1`) are published as prereleases.
+
+```powershell
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+## Architecture
+
+The scan engine is plain Go with no dependency on the UI. Wails is confined to a single adapter package, and the frontend talks to it through a `Backend` interface, which keeps both sides testable in isolation. The design decisions are recorded as [ADRs](docs/README.md), which are written in Spanish.
+
+| Path | Contents |
+|---|---|
+| `main.go` | Entry point: embeds the frontend and calls `desktop.Run` |
+| `internal/engine/` | Scan engine and SQLite index, independent of the UI |
+| `internal/desktop/` | Wails adapter, the only package that imports Wails |
+| `cmd/diskflow-cli/` | Developer CLI on top of the engine |
+| `frontend/src/backend/` | The `Backend` interface and its Wails implementation |
+| `frontend/src/features/` | UI screens (Vue 3 + TypeScript, Vite) |
+| `frontend/wailsjs/` | Bindings generated by Wails (do not edit) |
+| `docs/` | Architecture decision records |
+
+**Stack:** Go · Wails v2 · Vue 3 + TypeScript · SQLite (`modernc.org/sqlite`, pure Go) · d3-hierarchy.
+
+## License
+
+[MIT](LICENSE) © 2026 Diego Oswaldo Flores Rivas
