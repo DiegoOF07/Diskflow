@@ -32,6 +32,12 @@ To check that a download is intact, compare its hash with the one listed in `SHA
 Get-FileHash .\diskflow-<version>-windows-amd64-installer.exe -Algorithm SHA256
 ```
 
+Releases after `v0.1.0-rc.1` also carry a [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations), which proves that a file was built by this repository's release workflow from a specific commit. With the [GitHub CLI](https://cli.github.com/) installed:
+
+```powershell
+gh attestation verify .\diskflow-<version>-windows-amd64-installer.exe --repo DiegoOF07/Diskflow
+```
+
 The binaries are not code-signed yet, so Windows SmartScreen will show a warning the first time you run them, and Smart App Control may block the portable executable. If that happens, use the installer.
 
 The scan index is stored in `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
