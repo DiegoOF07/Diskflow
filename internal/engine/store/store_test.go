@@ -88,6 +88,17 @@ func TestOpenEnablesWALAndMigratesOnce(t *testing.T) {
 	}
 }
 
+func TestOpenUsesNormalSynchronous(t *testing.T) {
+	s, _ := openTemp(t)
+	var level int
+	if err := s.db.QueryRow("PRAGMA synchronous").Scan(&level); err != nil {
+		t.Fatal(err)
+	}
+	if level != 1 { // 0 OFF, 1 NORMAL, 2 FULL
+		t.Fatalf("synchronous = %d, want 1 (NORMAL)", level)
+	}
+}
+
 func TestCompletedScanBecomesActive(t *testing.T) {
 	s, _ := openTemp(t)
 	id := completeScan(t, s, `C:\work`)

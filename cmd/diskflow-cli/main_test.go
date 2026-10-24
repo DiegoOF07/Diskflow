@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -107,6 +108,41 @@ func TestScanInterruptedIsCancelled(t *testing.T) {
 	}
 	if f := fields(out); f["status"] != "cancelled" || f["cancel_to_exit_ms"] == "" {
 		t.Fatalf("output = %q, want status=cancelled with cancel_to_exit_ms", out)
+	}
+}
+
+func TestScanWritesProfiles(t *testing.T) {
+	ctx := context.Background()
+	tree := filepath.Join(t.TempDir(), "tree")
+	if _, err := cli(t, ctx, "gen", "--out", tree, "--entries", "2000"); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	profiles := map[string]string{
+		"--cpuprofile":   filepath.Join(dir, "cpu.prof"),
+		"--memprofile":   filepath.Join(dir, "mem.prof"),
+		"--blockprofile": filepath.Join(dir, "block.prof"),
+	}
+	args := []string{"scan", "--db", filepath.Join(dir, "dev.db")}
+	for flag, path := range profiles {
+		args = append(args, flag, path)
+	}
+	if _, err := cli(t, ctx, append(args, tree)...); err != nil {
+		t.Fatal(err)
+	}
+	for flag, path := range profiles {
+		if fi, err := os.Stat(path); err != nil || fi.Size() == 0 {
+			t.Errorf("%s: stat = %v, %v; want a non-empty file", flag, fi, err)
+		}
+	}
+}
+
+func TestScanBadProfilePathFailsBeforeScanning(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "dev.db")
+	bad := filepath.Join(t.TempDir(), "missing", "cpu.prof")
+	out, err := cli(t, context.Background(), "scan", "--db", db, "--cpuprofile", bad, t.TempDir())
+	if err == nil || errors.Is(err, errUsage) || out != "" {
+		t.Fatalf("out = %q, err = %v; want a file error and no scan", out, err)
 	}
 }
 

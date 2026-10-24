@@ -76,6 +76,14 @@ go run ./cmd/diskflow-cli scan --db dev.db C:\tmp\arbol              # lo escane
 go run ./cmd/diskflow-cli top --db dev.db --limit 10 C:\tmp\arbol    # lista los directorios más grandes
 ```
 
+Para saber en qué se va el tiempo de un escaneo, `scan` puede escribir perfiles de [pprof](https://pkg.go.dev/runtime/pprof). El perfil de bloqueos muestra las esperas en channels y mutex, y ralentiza el escaneo.
+
+```powershell
+go build -o diskflow-cli.exe ./cmd/diskflow-cli
+.\diskflow-cli.exe scan --db dev.db --cpuprofile cpu.prof --memprofile mem.prof C:\tmp\arbol
+go tool pprof -http=:8080 diskflow-cli.exe cpu.prof   # flame graph en el navegador
+```
+
 ### Publicar una versión
 
 Al subir un tag `v*` se ejecuta el workflow `release`, que compila en Windows y publica en GitHub Releases el ejecutable portable, el instalador y `SHA256SUMS.txt`. Los tags con sufijo (`v0.2.0-rc.1`) se publican como *prerelease*.

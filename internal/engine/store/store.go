@@ -33,7 +33,10 @@ func Open(path string) (*Store, error) {
 	dsn := "file:" + path +
 		"?_pragma=journal_mode(WAL)" + // readers don't block the writer
 		"&_pragma=busy_timeout(5000)" +
-		"&_pragma=foreign_keys(1)"
+		"&_pragma=foreign_keys(1)" +
+		// With WAL this only risks losing the last commits on power loss, never
+		// corruption; the index can be rebuilt by scanning again.
+		"&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("store: open: %w", err)
