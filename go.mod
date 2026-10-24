@@ -2,6 +2,8 @@ module github.com/DiegoOF07/Diskflow
 
 go 1.27
 
+toolchain go1.27.3
+
 require (
 	github.com/wailsapp/wails/v2 v2.16.0
 	modernc.org/sqlite v1.60.1
