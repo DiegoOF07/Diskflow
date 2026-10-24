@@ -8,6 +8,9 @@ on:
 
 permissions:
   contents: write # create the release and upload its files
+  id-token: write # sign the provenance attestation (Sigstore)
+  attestations: write
+  artifact-metadata: write
 
 jobs:
   windows:
@@ -48,14 +51,22 @@ jobs:
       - name: Build
         run: wails build -clean -nsis -trimpath
 
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Collect artifacts
         run: |
           mkdir dist
           cp build/bin/diskflow.exe "dist/diskflow-$VERSION-windows-amd64.exe"
           cp build/bin/*-installer.exe "dist/diskflow-$VERSION-windows-amd64-installer.exe"
           (cd dist && sha256sum -- *.exe > SHA256SUMS.txt)
+
+      # Proves the binaries were built by this workflow from this commit (gh attestation verify).
+      - uses: actions/attest@v4
+        with:
+          subject-path: dist/*.exe
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           prerelease=""
           [[ "$VERSION" == *-* ]] && prerelease="--prerelease"
           gh release create "$GITHUB_REF_NAME" dist/* --title "DiskFlow $VERSION" --generate-notes $prerelease

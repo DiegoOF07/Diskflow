@@ -32,6 +32,12 @@ Para comprobar que una descarga llegó íntegra, compara su hash con el que apar
 Get-FileHash .\diskflow-<versión>-windows-amd64-installer.exe -Algorithm SHA256
 ```
 
+Las releases posteriores a `v0.1.0-rc.1` incluyen además una [atestación de procedencia](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations), que demuestra que el archivo lo compiló el workflow de release de este repositorio a partir de un commit concreto. Con [GitHub CLI](https://cli.github.com/) instalado:
+
+```powershell
+gh attestation verify .\diskflow-<versión>-windows-amd64-installer.exe --repo DiegoOF07/Diskflow
+```
+
 Los binarios todavía no están firmados, así que Windows SmartScreen mostrará un aviso la primera vez que los ejecutes, y el Control inteligente de aplicaciones puede bloquear el portable. Si ocurre, usa el instalador.
 
 El índice de escaneos se guarda en `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
