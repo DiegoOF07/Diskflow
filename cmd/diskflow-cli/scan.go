@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -12,13 +13,21 @@ import (
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
 )
 
-func runScan(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+func runScan(ctx context.Context, args []string, stdout, stderr io.Writer) (err error) {
 	fs := newFlagSet("scan", stderr)
 	db := fs.String("db", "diskflow.db", "database file")
 	workers := fs.Int("workers", 0, "walker goroutines (0 = auto)")
+	var prof profiles
+	prof.register(fs)
 	if ok, err := parse(fs, args, 1); !ok {
 		return err
 	}
+
+	stopProfiles, err := prof.start()
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, stopProfiles()) }()
 
 	eng, err := engine.New(*db, engine.Options{Workers: *workers})
 	if err != nil {

@@ -16,7 +16,7 @@ const usage = `usage: diskflow-cli <command> [flags] [ROOT]
 
 commands:
   gen   --out DIR [--entries 10000] [--seed 1] [--size 4096]
-  scan  [--db diskflow.db] [--workers 0] ROOT
+  scan  [--db diskflow.db] [--workers 0] [--cpuprofile F] [--memprofile F] [--blockprofile F] ROOT
   top   [--db diskflow.db] [--limit 20] ROOT
 
 Flags go before ROOT. Ctrl+C cancels a running scan.`
