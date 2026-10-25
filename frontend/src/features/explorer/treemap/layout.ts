@@ -17,31 +17,42 @@ export interface Rect {
 }
 
 /**
- * Picks the cells to draw for a directory of parentSize bytes: the biggest
- * MAX_CELLS children with at least MIN_SHARE of the parent. The rest, and the
+ * Picks the cells to draw for a directory: the biggest MAX_CELLS children on
+ * disk with at least MIN_SHARE of the parent's on-disk size. The rest, and the
  * children that were never loaded, become one "Otros" cell.
  */
-export function groupOthers(children: readonly Node[], parentSize: number): Node[] {
-  if (parentSize <= 0) return []
-  const sorted = [...children].sort((a, b) => b.size - a.size)
+export function groupOthers(children: readonly Node[], parent: Pick<Node, 'size' | 'diskSize'>): Node[] {
+  if (parent.diskSize <= 0) return []
+  const sorted = [...children].sort((a, b) => b.diskSize - a.diskSize)
   const kept: Node[] = []
   let otherFiles = 0
   for (const c of sorted) {
-    if (kept.length < MAX_CELLS && c.size > 0 && c.size >= parentSize * MIN_SHARE) kept.push(c)
+    if (kept.length < MAX_CELLS && c.diskSize > 0 && c.diskSize >= parent.diskSize * MIN_SHARE) kept.push(c)
     else otherFiles += c.files
   }
-  const rest = parentSize - kept.reduce((sum, c) => sum + c.size, 0)
-  if (rest > 0) kept.push({ id: OTHERS_ID, name: 'Otros', kind: 'other', size: rest, files: otherFiles })
+  const rest = parent.diskSize - kept.reduce((sum, c) => sum + c.diskSize, 0)
+  if (rest > 0) {
+    const size = Math.max(parent.size - kept.reduce((sum, c) => sum + c.size, 0), 0)
+    kept.push({
+      id: OTHERS_ID,
+      name: 'Otros',
+      kind: 'other',
+      size,
+      diskSize: rest,
+      flags: 0,
+      files: otherFiles,
+    })
+  }
   return kept
 }
 
 type Datum = Node | { children: Node[] }
 
-/** Lays out nodes as a squarified treemap filling width × height. */
+/** Lays out nodes as a squarified treemap filling width × height, by on-disk size. */
 export function layoutTreemap(nodes: readonly Node[], width: number, height: number): Rect[] {
   if (nodes.length === 0 || width <= 0 || height <= 0) return []
   const root = hierarchy<Datum>({ children: [...nodes] }, (d) => ('children' in d ? d.children : undefined))
-    .sum((d) => ('size' in d ? d.size : 0))
+    .sum((d) => ('diskSize' in d ? d.diskSize : 0))
     .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
   return treemap<Datum>()
     .size([width, height])

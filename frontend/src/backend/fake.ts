@@ -65,5 +65,22 @@ export class FakeBackend implements Backend {
   }
 }
 
-export const dir = (id: number, name: string, size = 0): Node => ({ id, name, kind: 'dir', size, files: 0 })
-export const file = (id: number, name: string, size = 0): Node => ({ id, name, kind: 'file', size, files: 1 })
+// diskSize defaults to size: most tests don't care about the difference.
+export const dir = (id: number, name: string, size = 0, diskSize = size, flags = 0): Node => ({
+  id,
+  name,
+  kind: 'dir',
+  size,
+  diskSize,
+  flags,
+  files: 0,
+})
+export const file = (id: number, name: string, size = 0, diskSize = size, flags = 0): Node => ({
+  id,
+  name,
+  kind: 'file',
+  size,
+  diskSize,
+  flags,
+  files: 1,
+})

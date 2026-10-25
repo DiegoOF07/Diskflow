@@ -1,11 +1,16 @@
 // Mirrors the JSON of internal/engine/model.
 export type Kind = 'file' | 'dir' | 'link' | 'other'
 
+/** Why an entry's on-disk size differs from its logical size (bitmask, model.Flags). */
+export const Flag = { Sparse: 1, Compressed: 2, Cloud: 4 } as const
+
 export interface Node {
   id: number
   name: string
   kind: Kind
-  size: number
+  size: number // logical size
+  diskSize: number // space allocated on disk; what the UI ranks by
+  flags: number // a directory carries the union of its subtree's flags
   files: number // files in the subtree (1 for a file)
   err?: string
 }
@@ -14,6 +19,7 @@ export interface Progress {
   files: number
   dirs: number
   bytes: number
+  diskBytes: number
   errors: number
 }
 

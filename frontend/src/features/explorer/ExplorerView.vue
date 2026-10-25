@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
 import { formatBytes, formatCount, formatPercent } from './format'
+import { flagLabels, isEstimated, showLogical, sizeNote } from './size'
 import TreemapChart from './treemap/TreemapChart.vue'
 import { PAGE_SIZE, useExplorer } from './useExplorer'
 
@@ -11,7 +12,9 @@ const { root, trail, children, progress, summary, scanning, error, current, trun
 const STATUS_TEXT = { completed: 'Completado', cancelled: 'Cancelado', failed: 'Falló' } as const
 const hovered = ref<number | null>(null) // shared by the table and the treemap
 watch(current, () => (hovered.value = null))
-const share = (size: number) => (current.value?.size ? size / current.value.size : 0)
+const share = (diskSize: number) => (current.value?.diskSize ? diskSize / current.value.diskSize : 0)
+const logicalCol = computed(() => showLogical(current.value))
+const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0]))
 </script>
 
 <template>
@@ -30,7 +33,9 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
     <p class="status" aria-live="polite">
       <template v-if="progress">
         {{ formatCount(progress.files) }} archivos · {{ formatCount(progress.dirs) }} carpetas ·
-        {{ formatBytes(progress.bytes) }}
+        <span :title="`${formatBytes(progress.bytes)} lógicos`"
+          >{{ formatBytes(progress.diskBytes) }} en disco</span
+        >
         <template v-if="progress.errors"> · {{ formatCount(progress.errors) }} sin acceso</template>
       </template>
       <span v-if="scanning"> — analizando…</span>
@@ -46,6 +51,11 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
       Esta carpeta aún no se ha analizado. Pulsa <strong>Analizar</strong>.
     </p>
 
+    <p v-if="estimated && !scanning" class="notice">
+      Este análisis es anterior al cálculo del tamaño en disco y muestra tamaños lógicos. Pulsa
+      <strong>Analizar</strong> para ver el espacio real.
+    </p>
+
     <nav v-if="trail.length" class="crumbs" aria-label="Ruta">
       <template v-for="(n, i) in trail" :key="n.id">
         <button
@@ -58,15 +68,16 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
         </button>
         <span v-if="i < trail.length - 1" aria-hidden="true">›</span>
       </template>
-      <span v-if="current" class="total"
-        >{{ formatBytes(current.size) }} · {{ formatCount(current.files) }} archivos</span
+      <span v-if="current" class="total" :title="sizeNote(current) || `${formatBytes(current.size)} lógicos`"
+        >{{ formatBytes(current.diskSize) }}{{ estimated ? '' : ' en disco' }} ·
+        {{ formatCount(current.files) }} archivos</span
       >
     </nav>
 
     <TreemapChart
       v-if="current && children.length"
       :nodes="children"
-      :parent-size="current.size"
+      :parent="current"
       :highlighted="hovered"
       @hover="hovered = $event"
       @open="ex.open"
@@ -76,7 +87,8 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
       <thead>
         <tr>
           <th scope="col">Nombre</th>
-          <th scope="col" class="num">Tamaño</th>
+          <th scope="col" class="num">En disco</th>
+          <th v-if="logicalCol" scope="col" class="num">Lógico</th>
           <th scope="col" class="num">% de la carpeta</th>
           <th scope="col" class="num">Archivos</th>
         </tr>
@@ -95,11 +107,15 @@ const share = (size: number) => (current.value?.size ? size / current.value.size
             </button>
             <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
             <span v-if="n.err" class="badge" :title="n.err">sin acceso</span>
+            <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
+              {{ label }}
+            </span>
           </td>
-          <td class="num">{{ formatBytes(n.size) }}</td>
+          <td class="num">{{ formatBytes(n.diskSize) }}</td>
+          <td v-if="logicalCol" class="num logical">{{ formatBytes(n.size) }}</td>
           <td class="num share">
-            <span class="bar" :style="{ width: `${share(n.size) * 100}%` }" aria-hidden="true"></span>
-            <span class="pct">{{ formatPercent(n.size, current?.size ?? 0) }}</span>
+            <span class="bar" :style="{ width: `${share(n.diskSize) * 100}%` }" aria-hidden="true"></span>
+            <span class="pct">{{ formatPercent(n.diskSize, current?.diskSize ?? 0) }}</span>
           </td>
           <td class="num">{{ formatCount(n.files) }}</td>
         </tr>
@@ -214,5 +230,17 @@ tr.hovered {
   border: 1px solid currentColor;
   border-radius: 4px;
   padding: 0 4px;
+}
+.badge.info {
+  color: var(--muted);
+  cursor: help;
+}
+.logical {
+  color: var(--muted);
+}
+.notice {
+  background: var(--accent-soft);
+  padding: 8px 12px;
+  border-radius: 6px;
 }
 </style>

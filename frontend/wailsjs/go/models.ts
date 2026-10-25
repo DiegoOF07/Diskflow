@@ -5,6 +5,8 @@ export namespace model {
 	    name: string;
 	    kind: string;
 	    size: number;
+	    diskSize: number;
+	    flags: number;
 	    files: number;
 	    err?: string;
 	
@@ -18,6 +20,8 @@ export namespace model {
 	        this.name = source["name"];
 	        this.kind = source["kind"];
 	        this.size = source["size"];
+	        this.diskSize = source["diskSize"];
+	        this.flags = source["flags"];
 	        this.files = source["files"];
 	        this.err = source["err"];
 	    }
