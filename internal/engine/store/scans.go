@@ -14,9 +14,11 @@ import (
 // DirTotal holds the aggregated subtree values of a directory.
 // An empty Err keeps the error already stored for that entry.
 type DirTotal struct {
-	Size  int64
-	Files int64
-	Err   string
+	Size     int64
+	DiskSize int64
+	Flags    model.Flags // union of the flags in the subtree
+	Files    int64
+	Err      string
 }
 
 // BeginScan registers a new running scan of root and returns its id.
@@ -34,8 +36,8 @@ func (s *Store) BeginScan(ctx context.Context, root string) (int64, error) {
 func (s *Store) InsertEntries(ctx context.Context, scanID int64, entries []model.Entry) error {
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		stmt, err := tx.PrepareContext(ctx, `INSERT INTO entries
-			(scan_id, id, parent_id, name, kind, size, files, mtime, err)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			(scan_id, id, parent_id, name, kind, size, disk_size, flags, files, mtime, err)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
@@ -46,7 +48,7 @@ func (s *Store) InsertEntries(ctx context.Context, scanID int64, entries []model
 				files = 1
 			}
 			if _, err := stmt.ExecContext(ctx,
-				scanID, e.ID, e.ParentID, e.Name, e.Kind, e.Size, files, e.ModTime, e.Err); err != nil {
+				scanID, e.ID, e.ParentID, e.Name, e.Kind, e.Size, e.DiskSize, e.Flags, files, e.ModTime, e.Err); err != nil {
 				return err
 			}
 		}
@@ -58,11 +60,11 @@ func (s *Store) InsertEntries(ctx context.Context, scanID int64, entries []model
 	return nil
 }
 
-// SetDirTotals writes the aggregated size, file count and read error of directories.
+// SetDirTotals writes the aggregated sizes, flags, file count and read error of directories.
 func (s *Store) SetDirTotals(ctx context.Context, scanID int64, totals map[int64]DirTotal) error {
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		stmt, err := tx.PrepareContext(ctx, `UPDATE entries
-			SET size = ?, files = ?, err = CASE WHEN ? = '' THEN err ELSE ? END
+			SET size = ?, disk_size = ?, flags = ?, files = ?, err = CASE WHEN ? = '' THEN err ELSE ? END
 			WHERE scan_id = ? AND id = ?`)
 		if err != nil {
 			return err
@@ -72,7 +74,7 @@ func (s *Store) SetDirTotals(ctx context.Context, scanID int64, totals map[int64
 		// this step ~3.5x slower on a 500k-entry scan.
 		for _, id := range slices.Sorted(maps.Keys(totals)) {
 			t := totals[id]
-			if _, err := stmt.ExecContext(ctx, t.Size, t.Files, t.Err, t.Err, scanID, id); err != nil {
+			if _, err := stmt.ExecContext(ctx, t.Size, t.DiskSize, t.Flags, t.Files, t.Err, t.Err, scanID, id); err != nil {
 				return err
 			}
 		}
@@ -92,9 +94,9 @@ func (s *Store) SetDirTotals(ctx context.Context, scanID int64, totals map[int64
 func (s *Store) FinishScan(ctx context.Context, scanID int64, status string, p model.Progress) error {
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE scan_runs
-			SET status = ?, finished_at = ?, files = ?, dirs = ?, bytes = ?, errors = ?
+			SET status = ?, finished_at = ?, files = ?, dirs = ?, bytes = ?, disk_bytes = ?, errors = ?
 			WHERE id = ?`,
-			status, time.Now().Unix(), p.Files, p.Dirs, p.Bytes, p.Errors, scanID); err != nil {
+			status, time.Now().Unix(), p.Files, p.Dirs, p.Bytes, p.DiskBytes, p.Errors, scanID); err != nil {
 			return err
 		}
 		if status != model.StatusCompleted {

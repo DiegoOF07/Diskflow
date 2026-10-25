@@ -83,6 +83,9 @@ func TestScanTotalsMatchTheTree(t *testing.T) {
 	if root.Size != st.Bytes || root.Files != int64(st.Files) {
 		t.Fatalf("Root = %+v, want Size=%d Files=%d", root, st.Bytes, st.Files)
 	}
+	if root.DiskSize != sum.DiskBytes {
+		t.Fatalf("Root.DiskSize = %d, summary DiskBytes = %d; want them equal", root.DiskSize, sum.DiskBytes)
+	}
 }
 
 func TestDirectorySizesAreSubtreeTotals(t *testing.T) {
@@ -90,23 +93,29 @@ func TestDirectorySizesAreSubtreeTotals(t *testing.T) {
 	dir, _ := generate(t, 3000)
 	scanToEnd(t, e, dir)
 
-	// For every directory on the first two levels, its size equals the sum of its children.
+	// For every directory on the first two levels, its sizes equal the sum of
+	// its children and its flags their union. On Unix the fixture files are
+	// sparse, which exercises the flags; on Windows the disk sizes are rounded.
 	var check func(parent model.Node, depth int)
 	check = func(parent model.Node, depth int) {
 		kids, err := e.Children(dir, parent.ID, 500)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var size, files int64
+		var size, diskSize, files int64
+		var flags model.Flags
 		for _, k := range kids {
 			size += k.Size
+			diskSize += k.DiskSize
 			files += k.Files
+			flags |= k.Flags
 			if k.Kind == "dir" && depth < 2 {
 				check(k, depth+1)
 			}
 		}
-		if parent.Size != size || parent.Files != files {
-			t.Fatalf("%s: Size=%d Files=%d, children add up to %d and %d", parent.Name, parent.Size, parent.Files, size, files)
+		if parent.Size != size || parent.DiskSize != diskSize || parent.Files != files || parent.Flags != flags {
+			t.Fatalf("%s: Size=%d DiskSize=%d Files=%d Flags=%03b, children add up to %d, %d, %d, %03b",
+				parent.Name, parent.Size, parent.DiskSize, parent.Files, parent.Flags, size, diskSize, files, flags)
 		}
 	}
 	root, err := e.Root(dir)

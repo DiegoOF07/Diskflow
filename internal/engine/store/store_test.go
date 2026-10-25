@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -23,7 +24,8 @@ func openTemp(t *testing.T) (*Store, string) {
 	return s, path
 }
 
-// completeScan stores root with two files (100 and 300 bytes) as a completed scan.
+// completeScan stores root with two files (100 and 300 bytes; 4 and 8 KiB on
+// disk) as a completed scan.
 func completeScan(t *testing.T, s *Store, root string) int64 {
 	t.Helper()
 	id, err := s.BeginScan(ctx, root)
@@ -32,16 +34,16 @@ func completeScan(t *testing.T, s *Store, root string) int64 {
 	}
 	entries := []model.Entry{
 		{ID: 1, Name: root, Kind: model.KindDir},
-		{ID: 2, ParentID: 1, Name: "small", Kind: model.KindFile, Size: 100},
-		{ID: 3, ParentID: 1, Name: "big", Kind: model.KindFile, Size: 300},
+		{ID: 2, ParentID: 1, Name: "small", Kind: model.KindFile, Size: 100, DiskSize: 4096},
+		{ID: 3, ParentID: 1, Name: "big", Kind: model.KindFile, Size: 300, DiskSize: 8192},
 	}
 	if err := s.InsertEntries(ctx, id, entries); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetDirTotals(ctx, id, map[int64]DirTotal{1: {Size: 400, Files: 2}}); err != nil {
+	if err := s.SetDirTotals(ctx, id, map[int64]DirTotal{1: {Size: 400, DiskSize: 12288, Files: 2}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.FinishScan(ctx, id, model.StatusCompleted, model.Progress{Files: 2, Dirs: 1, Bytes: 400}); err != nil {
+	if err := s.FinishScan(ctx, id, model.StatusCompleted, model.Progress{Files: 2, Dirs: 1, Bytes: 400, DiskBytes: 12288}); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -83,8 +85,8 @@ func TestOpenEnablesWALAndMigratesOnce(t *testing.T) {
 	defer s2.Close()
 	var version int
 	s2.db.QueryRow("PRAGMA user_version").Scan(&version)
-	if version != 1 {
-		t.Fatalf("user_version = %d, want 1", version)
+	if version != 2 {
+		t.Fatalf("user_version = %d, want 2", version)
 	}
 }
 
@@ -96,6 +98,43 @@ func TestOpenUsesNormalSynchronous(t *testing.T) {
 	}
 	if level != 1 { // 0 OFF, 1 NORMAL, 2 FULL
 		t.Fatalf("synchronous = %d, want 1 (NORMAL)", level)
+	}
+}
+
+func TestMigrationFillsDiskSizeOfOlderScans(t *testing.T) {
+	// A database as version 1 left it: one completed scan, no disk_size column.
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1, _ := migrations.ReadFile("migrations/001_init.sql")
+	for _, q := range []string{string(v1), "PRAGMA user_version = 1",
+		"INSERT INTO scan_runs (id, root, status, started_at, bytes) VALUES (1, '/r', 'completed', 0, 400)",
+		"INSERT INTO entries (scan_id, id, parent_id, name, kind, size, files, mtime) VALUES (1, 1, 0, '/r', 1, 400, 1, 0)",
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%.40s: %v", q, err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	root, err := s.Root(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root.DiskSize != 400 || root.Flags != 0 {
+		t.Fatalf("Root = %+v, want DiskSize copied from Size (400) and no flags", root)
+	}
+	var diskBytes int64
+	s.db.QueryRow("SELECT disk_bytes FROM scan_runs WHERE id = 1").Scan(&diskBytes)
+	if diskBytes != 400 {
+		t.Fatalf("scan_runs.disk_bytes = %d, want 400", diskBytes)
 	}
 }
 
@@ -111,7 +150,7 @@ func TestCompletedScanBecomesActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := model.Node{ID: 1, Name: `C:\work`, Kind: "dir", Size: 400, Files: 2}
+	want := model.Node{ID: 1, Name: `C:\work`, Kind: "dir", Size: 400, DiskSize: 12288, Files: 2}
 	if root != want {
 		t.Fatalf("Root = %+v, want %+v", root, want)
 	}
@@ -146,6 +185,26 @@ func TestChildrenOrderedBySizeDesc(t *testing.T) {
 	}
 }
 
+func TestChildrenOrderedByDiskSize(t *testing.T) {
+	s, _ := openTemp(t)
+	id, _ := s.BeginScan(ctx, "/r")
+	s.InsertEntries(ctx, id, []model.Entry{
+		{ID: 1, Name: "/r", Kind: model.KindDir},
+		{ID: 2, ParentID: 1, Name: "disk.img", Kind: model.KindFile, Size: 512 << 30, DiskSize: 3 << 30, Flags: model.FlagSparse},
+		{ID: 3, ParentID: 1, Name: "video.mp4", Kind: model.KindFile, Size: 4 << 30, DiskSize: 4 << 30},
+	})
+	kids, err := s.Children(ctx, id, 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kids) != 2 || kids[0].Name != "video.mp4" {
+		t.Fatalf("Children = %+v, want video.mp4 first (bigger on disk)", kids)
+	}
+	if img := kids[1]; img.Size != 512<<30 || img.DiskSize != 3<<30 || img.Flags != model.FlagSparse {
+		t.Fatalf("disk.img = %+v, want both sizes and FlagSparse", img)
+	}
+}
+
 func TestChildrenLimitIsClamped(t *testing.T) {
 	s, _ := openTemp(t)
 	id, _ := s.BeginScan(ctx, "/r")
@@ -176,13 +235,20 @@ func TestTopDirsExcludesRootAndFiles(t *testing.T) {
 		{ID: 3, ParentID: 2, Name: "b", Kind: model.KindDir},
 		{ID: 4, ParentID: 1, Name: "huge.iso", Kind: model.KindFile, Size: 9000},
 	})
-	s.SetDirTotals(ctx, id, map[int64]DirTotal{1: {Size: 9300}, 2: {Size: 300}, 3: {Size: 200}})
+	s.SetDirTotals(ctx, id, map[int64]DirTotal{
+		1: {Size: 9300, DiskSize: 9300},
+		2: {Size: 1, DiskSize: 300, Flags: model.FlagCompressed},
+		3: {Size: 9, DiskSize: 200},
+	})
 	top, err := s.TopDirs(ctx, id, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(top) != 2 || top[0].Name != "a" || top[1].Name != "b" {
-		t.Fatalf("TopDirs = %+v, want [a b]", top)
+		t.Fatalf("TopDirs = %+v, want [a b] (by disk size)", top)
+	}
+	if top[0].Flags != model.FlagCompressed {
+		t.Fatalf("a.Flags = %03b, want the stored subtree flags", top[0].Flags)
 	}
 }
 

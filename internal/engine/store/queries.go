@@ -40,17 +40,17 @@ func (s *Store) Root(ctx context.Context, scanID int64) (model.Node, error) {
 	return n, nil
 }
 
-// Children returns up to limit children of parentID, biggest first.
+// Children returns up to limit children of parentID, biggest on disk first.
 func (s *Store) Children(ctx context.Context, scanID, parentID int64, limit int) ([]model.Node, error) {
 	return s.queryNodes(ctx, "children",
-		"SELECT "+nodeColumns+" FROM entries WHERE scan_id = ? AND parent_id = ? ORDER BY size DESC LIMIT ?",
+		"SELECT "+nodeColumns+" FROM entries WHERE scan_id = ? AND parent_id = ? ORDER BY disk_size DESC LIMIT ?",
 		scanID, parentID, clampLimit(limit))
 }
 
-// TopDirs returns the biggest directories of a scan, excluding the root.
+// TopDirs returns the biggest directories on disk of a scan, excluding the root.
 func (s *Store) TopDirs(ctx context.Context, scanID int64, limit int) ([]model.Node, error) {
 	return s.queryNodes(ctx, "top dirs",
-		"SELECT "+nodeColumns+" FROM entries WHERE scan_id = ? AND kind = ? AND id <> 1 ORDER BY size DESC LIMIT ?",
+		"SELECT "+nodeColumns+" FROM entries WHERE scan_id = ? AND kind = ? AND id <> 1 ORDER BY disk_size DESC LIMIT ?",
 		scanID, model.KindDir, clampLimit(limit))
 }
 
@@ -86,7 +86,7 @@ func (s *Store) Path(ctx context.Context, scanID, id int64) ([]string, error) {
 	return names, nil
 }
 
-const nodeColumns = "id, name, kind, size, files, err"
+const nodeColumns = "id, name, kind, size, disk_size, flags, files, err"
 
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
 type rowScanner interface {
@@ -96,7 +96,7 @@ type rowScanner interface {
 func scanNode(r rowScanner) (model.Node, error) {
 	var n model.Node
 	var kind model.Kind
-	if err := r.Scan(&n.ID, &n.Name, &kind, &n.Size, &n.Files, &n.Err); err != nil {
+	if err := r.Scan(&n.ID, &n.Name, &kind, &n.Size, &n.DiskSize, &n.Flags, &n.Files, &n.Err); err != nil {
 		return model.Node{}, err
 	}
 	n.Kind = kind.String()

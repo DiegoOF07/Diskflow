@@ -69,7 +69,7 @@ func TestGenScanTop(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan := fields(out)
-	if scan["status"] != "completed" || scan["files"] != gen["files"] || scan["bytes"] != gen["bytes"] {
+	if scan["status"] != "completed" || scan["files"] != gen["files"] || scan["bytes"] != gen["bytes"] || scan["disk_bytes"] == "" {
 		t.Fatalf("scan = %q, gen = %q", out, gen)
 	}
 
@@ -85,6 +85,9 @@ func TestGenScanTop(t *testing.T) {
 	defer e.Close()
 	top, _ := e.TopDirs(tree, 3)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if header := lines[len(lines)-4]; !strings.Contains(header, "ON DISK") || !strings.Contains(header, "LOGICAL") {
+		t.Fatalf("header = %q, want ON DISK and LOGICAL columns", header)
+	}
 	rows := lines[len(lines)-3:]
 	for i, d := range top {
 		want, _ := e.Path(tree, d.ID)

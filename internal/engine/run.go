@@ -16,10 +16,12 @@ const (
 
 // dirAgg accumulates a directory's subtree while the scan runs.
 type dirAgg struct {
-	parent int64
-	size   int64
-	files  int64
-	err    string
+	parent   int64
+	size     int64
+	diskSize int64
+	flags    model.Flags
+	files    int64
+	err      string
 }
 
 // scanRun holds the state of one scan. Only the goroutine running
@@ -104,11 +106,14 @@ func (r *scanRun) add(entry model.Entry) {
 	case model.KindFile:
 		r.progress.Files++
 		r.progress.Bytes += entry.Size
+		r.progress.DiskBytes += entry.DiskSize
 		// The walker emits every directory before its children, so all
 		// ancestors are already in r.dirs.
 		for p := entry.ParentID; p != 0; {
 			d := r.dirs[p]
 			d.size += entry.Size
+			d.diskSize += entry.DiskSize
+			d.flags |= entry.Flags
 			d.files++
 			p = d.parent
 		}
@@ -159,7 +164,7 @@ func (r *scanRun) finish(ctx context.Context, walkErr error) model.Summary {
 func (r *scanRun) totals() map[int64]store.DirTotal {
 	t := make(map[int64]store.DirTotal, len(r.dirs))
 	for id, d := range r.dirs {
-		t[id] = store.DirTotal{Size: d.size, Files: d.files, Err: d.err}
+		t[id] = store.DirTotal{Size: d.size, DiskSize: d.diskSize, Flags: d.flags, Files: d.files, Err: d.err}
 	}
 	return t
 }

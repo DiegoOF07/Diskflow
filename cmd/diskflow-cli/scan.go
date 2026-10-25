@@ -39,7 +39,7 @@ func runScan(ctx context.Context, args []string, stdout, stderr io.Writer) (err 
 	var sum model.Summary
 	_, err = eng.StartScan(fs.Arg(0), engine.Callbacks{
 		OnProgress: func(p model.Progress) {
-			fmt.Fprintf(stderr, "\rfiles=%d dirs=%d %s", p.Files, p.Dirs, humanBytes(p.Bytes))
+			fmt.Fprintf(stderr, "\rfiles=%d dirs=%d %s (%s on disk)", p.Files, p.Dirs, humanBytes(p.Bytes), humanBytes(p.DiskBytes))
 		},
 		OnDone: func(s model.Summary) { sum = s },
 	})
@@ -59,8 +59,8 @@ func runScan(ctx context.Context, args []string, stdout, stderr io.Writer) (err 
 
 	entries := sum.Files + sum.Dirs
 	rate := float64(entries) / max(float64(sum.ElapsedMs)/1000, 0.001)
-	fmt.Fprintf(stdout, "status=%s files=%d dirs=%d bytes=%d errors=%d elapsed_ms=%d entries_per_s=%.0f peak_heap_mb=%.1f",
-		sum.Status, sum.Files, sum.Dirs, sum.Bytes, sum.Errors, sum.ElapsedMs, rate, float64(peak())/(1<<20))
+	fmt.Fprintf(stdout, "status=%s files=%d dirs=%d bytes=%d disk_bytes=%d errors=%d elapsed_ms=%d entries_per_s=%.0f peak_heap_mb=%.1f",
+		sum.Status, sum.Files, sum.Dirs, sum.Bytes, sum.DiskBytes, sum.Errors, sum.ElapsedMs, rate, float64(peak())/(1<<20))
 	if at := cancelAt.Load(); at != 0 {
 		fmt.Fprintf(stdout, " cancel_to_exit_ms=%d", time.Since(time.Unix(0, at)).Milliseconds())
 	}
