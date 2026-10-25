@@ -13,6 +13,7 @@ const summary = (status: Summary['status']): Summary => ({
   files: 2,
   dirs: 1,
   bytes: 300,
+  diskBytes: 8192,
   errors: 0,
 })
 
@@ -70,7 +71,7 @@ describe('scan', () => {
     expect(backend.started).toEqual([ROOT])
     expect(ex.scanning.value).toBe(true)
 
-    backend.emitProgress({ files: 1, dirs: 1, bytes: 100, errors: 0 })
+    backend.emitProgress({ files: 1, dirs: 1, bytes: 100, diskBytes: 4096, errors: 0 })
     expect(ex.progress.value?.files).toBe(1)
 
     backend.roots.set(ROOT, dir(1, ROOT, 300))

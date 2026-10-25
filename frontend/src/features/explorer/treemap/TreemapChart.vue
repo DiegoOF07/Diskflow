@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Node } from '../../../backend/types'
 import { formatBytes, formatPercent } from '../format'
+import { sizeNote } from '../size'
 import { fitLabel, groupOthers, layoutTreemap, OTHERS_ID } from './layout'
 
 const props = defineProps<{
   nodes: readonly Node[]
-  parentSize: number
+  parent: Node
   highlighted: number | null // id hovered in the table
 }>()
 const emit = defineEmits<{ open: [node: Node]; hover: [id: number | null] }>()
@@ -23,7 +24,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
-const cells = computed(() => groupOthers(props.nodes, props.parentSize))
+const cells = computed(() => groupOthers(props.nodes, props.parent))
 const rects = computed(() => layoutTreemap(cells.value, width.value, HEIGHT))
 
 // A row hidden inside "Otros" highlights the "Otros" cell.
@@ -32,6 +33,12 @@ const active = computed(() => {
   if (id == null) return null
   return cells.value.some((c) => c.id === id) ? id : OTHERS_ID
 })
+
+function cellTitle(n: Node) {
+  const line = `${n.name} — ${formatBytes(n.diskSize)} en disco (${formatPercent(n.diskSize, props.parent.diskSize)})`
+  const note = sizeNote(n)
+  return note ? `${line}\n${note}` : line
+}
 
 const kindClass = (n: Node) => (n.id === OTHERS_ID ? 'others' : n.kind)
 </script>
@@ -47,13 +54,11 @@ const kindClass = (n: Node) => (n.id === OTHERS_ID ? 'others' : n.kind)
         @click="r.node.kind === 'dir' && emit('open', r.node)"
       >
         <rect :x="r.x0" :y="r.y0" :width="r.x1 - r.x0" :height="r.y1 - r.y0" />
-        <title>
-          {{ r.node.name }} — {{ formatBytes(r.node.size) }} ({{ formatPercent(r.node.size, parentSize) }})
-        </title>
+        <title>{{ cellTitle(r.node) }}</title>
         <template v-if="r.y1 - r.y0 > 18">
           <text :x="r.x0 + 4" :y="r.y0 + 15">{{ fitLabel(r.node.name, r.x1 - r.x0) }}</text>
           <text v-if="r.y1 - r.y0 > 36" class="size" :x="r.x0 + 4" :y="r.y0 + 30">
-            {{ fitLabel(formatBytes(r.node.size), r.x1 - r.x0) }}
+            {{ fitLabel(formatBytes(r.node.diskSize), r.x1 - r.x0) }}
           </text>
         </template>
       </g>
