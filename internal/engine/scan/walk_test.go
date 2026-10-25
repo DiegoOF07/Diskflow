@@ -276,3 +276,25 @@ func TestWalkSkipsExcludedDirs(t *testing.T) {
 		t.Fatal("sibling dirs must still be walked")
 	}
 }
+
+func TestWalkReportsDiskSize(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "plain"), make([]byte, 10_000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	makeSparse(t, filepath.Join(root, "disk.img"), 1<<30)
+
+	got := collect(t, root, Options{})
+
+	plain := byName(got, "plain")
+	if plain.DiskSize < plain.Size || plain.Flags != 0 {
+		t.Errorf("plain = %+v, want DiskSize >= Size and no flags", plain)
+	}
+	img := byName(got, "disk.img")
+	if img.Size != 1<<30 || img.DiskSize >= img.Size/1000 || img.Flags&model.FlagSparse == 0 {
+		t.Errorf("disk.img = %+v, want 1 GiB logical, almost nothing on disk, FlagSparse", img)
+	}
+	if dir := byName(got, root); dir.DiskSize != 0 {
+		t.Errorf("root DiskSize = %d before aggregation, want 0", dir.DiskSize)
+	}
+}

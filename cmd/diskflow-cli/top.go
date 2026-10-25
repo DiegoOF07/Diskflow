@@ -32,19 +32,19 @@ func runTop(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(stdout, "%s  %s in %d files\n\n", r.Name, humanBytes(r.Size), r.Files)
+	fmt.Fprintf(stdout, "%s  %s on disk (%s logical) in %d files\n\n", r.Name, humanBytes(r.DiskSize), humanBytes(r.Size), r.Files)
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(w, "SIZE\tFILES\t%\t\tPATH")
+	fmt.Fprintln(w, "ON DISK\tLOGICAL\tFILES\t%\t\tPATH")
 	for _, d := range dirs {
 		path, err := eng.Path(root, d.ID)
 		if err != nil {
 			return err
 		}
 		pct := 0.0
-		if r.Size > 0 {
-			pct = 100 * float64(d.Size) / float64(r.Size)
+		if r.DiskSize > 0 {
+			pct = 100 * float64(d.DiskSize) / float64(r.DiskSize)
 		}
-		fmt.Fprintf(w, "%s\t%d\t%.1f\t\t%s\n", humanBytes(d.Size), d.Files, pct, path)
+		fmt.Fprintf(w, "%s\t%s\t%d\t%.1f\t\t%s\n", humanBytes(d.DiskSize), humanBytes(d.Size), d.Files, pct, path)
 	}
 	return w.Flush()
 }

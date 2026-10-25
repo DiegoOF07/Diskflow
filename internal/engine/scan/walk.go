@@ -52,6 +52,7 @@ type walker struct {
 	ctx    context.Context
 	opts   Options
 	out    chan<- model.Entry
+	sizer  diskSizer
 	nextID atomic.Int64
 
 	mu         sync.Mutex
@@ -86,6 +87,7 @@ func (w *walker) run(root string) error {
 		return fmt.Errorf("%w: %s", ErrNotDir, root)
 	}
 
+	w.sizer = newDiskSizer(root)
 	w.nextID.Store(1)
 	if !w.send(model.Entry{ID: 1, Name: root, Kind: model.KindDir, ModTime: info.ModTime().Unix()}) {
 		return w.ctx.Err()
@@ -189,6 +191,7 @@ func (w *walker) process(d dirItem, local *[]dirItem) {
 			e.ModTime = info.ModTime().Unix()
 			if e.Kind == model.KindFile {
 				e.Size = info.Size()
+				e.DiskSize, e.Flags = w.sizer.size(d.path, e.Name, info)
 			}
 		}
 		if !w.send(e) {
