@@ -18,6 +18,7 @@ import (
 // Events emitted to the frontend. Keep in sync with frontend/src/backend/wails.ts.
 const (
 	EventProgress = "scan:progress" // model.Progress
+	EventSaving   = "scan:saving"   // no data; the scan can no longer be cancelled
 	EventDone     = "scan:done"     // model.Summary
 )
 
@@ -121,7 +122,7 @@ func (a *App) RemoveRoot(id int64) error {
 }
 
 // StartScan scans root in the background. Progress and the result arrive as
-// EventProgress and EventDone.
+// EventProgress, EventSaving and EventDone.
 func (a *App) StartScan(root string) error {
 	eng, err := a.engine()
 	if err != nil {
@@ -129,6 +130,7 @@ func (a *App) StartScan(root string) error {
 	}
 	_, err = eng.StartScan(root, engine.Callbacks{
 		OnProgress: func(p model.Progress) { a.emit(EventProgress, p) },
+		OnSaving:   func() { a.emit(EventSaving, nil) },
 		OnDone:     func(s model.Summary) { a.emit(EventDone, s) },
 	})
 	return err

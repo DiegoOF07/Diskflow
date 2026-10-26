@@ -73,5 +73,7 @@ export interface Backend {
   root(root: string): Promise<Node | null>
   children(root: string, parentId: number, limit: number): Promise<Node[]>
   onProgress(cb: (p: Progress) => void): Off
+  /** The walk is over and the results are being saved; the scan can no longer be cancelled. */
+  onSaving(cb: () => void): Off
   onDone(cb: (s: Summary) => void): Off
 }

@@ -70,10 +70,11 @@ consume:
 		}
 	}
 
-	sum := r.finish(ctx, <-walkErr)
-	sum.ElapsedMs = time.Since(start).Milliseconds()
 	cb.OnProgress(r.progress)
+	sum := r.finish(ctx, <-walkErr, cb.OnSaving)
+	sum.ElapsedMs = time.Since(start).Milliseconds()
 	cb.OnDone(sum)
+	e.requestPrune()
 
 	// Release the engine only after OnDone, so a new scan's events can never
 	// arrive before this scan's OnDone.
@@ -134,7 +135,7 @@ func (r *scanRun) flush() {
 }
 
 // finish decides the final status and closes the scan in the store.
-func (r *scanRun) finish(ctx context.Context, walkErr error) model.Summary {
+func (r *scanRun) finish(ctx context.Context, walkErr error, onSaving func()) model.Summary {
 	sum := model.Summary{ScanID: r.id}
 	switch {
 	case r.storeErr != nil:
@@ -144,6 +145,7 @@ func (r *scanRun) finish(ctx context.Context, walkErr error) model.Summary {
 	case walkErr != nil:
 		sum.Status, sum.Error = model.StatusFailed, walkErr.Error()
 	default:
+		onSaving()
 		r.flush()
 		if r.storeErr == nil {
 			r.storeErr = r.st.SetDirTotals(context.Background(), r.id, r.totals())

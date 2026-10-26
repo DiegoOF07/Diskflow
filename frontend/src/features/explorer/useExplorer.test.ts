@@ -62,11 +62,16 @@ describe('scan', () => {
 
     backend.emitProgress({ files: 1, dirs: 1, bytes: 100, diskBytes: 4096, errors: 0 })
     expect(ex.progress.value?.files).toBe(1)
+    expect(ex.saving.value).toBe(false)
+
+    backend.emitSaving()
+    expect(ex.saving.value).toBe(true)
 
     backend.roots.set(ROOT, dir(1, ROOT, 300))
     backend.emitDone(summary('completed'))
     await flush()
     expect(ex.scanning.value).toBe(false)
+    expect(ex.saving.value).toBe(false)
     expect(ex.summary.value?.status).toBe('completed')
     expect(ex.children.value.map((n) => n.name)).toEqual(['src', 'a.txt'])
   })
@@ -144,7 +149,7 @@ describe('navigation', () => {
 
 it('unsubscribes from scan events when its scope is disposed', () => {
   setup()
-  expect(backend.listeners).toBe(2)
+  expect(backend.listeners).toBe(3)
   scope.stop()
   expect(backend.listeners).toBe(0)
 })

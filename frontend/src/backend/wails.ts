@@ -14,6 +14,7 @@ import type { Backend, Node, Progress, RootInfo, Summary } from './types'
 
 // Event names emitted by internal/desktop/app.go.
 const EVENT_PROGRESS = 'scan:progress'
+const EVENT_SAVING = 'scan:saving'
 const EVENT_DONE = 'scan:done'
 
 export const wailsBackend: Backend = {
@@ -30,5 +31,6 @@ export const wailsBackend: Backend = {
   children: async (root, parentId, limit) => (await Children(root, parentId, limit)) as Node[],
   // EventsOn returns its own unsubscribe function; EventsOff would remove every listener of the event.
   onProgress: (cb) => EventsOn(EVENT_PROGRESS, (p: Progress) => cb(p)),
+  onSaving: (cb) => EventsOn(EVENT_SAVING, () => cb()),
   onDone: (cb) => EventsOn(EVENT_DONE, (s: Summary) => cb(s)),
 }

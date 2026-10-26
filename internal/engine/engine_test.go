@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -310,5 +311,61 @@ func TestPathPointsToTheRealDirectory(t *testing.T) {
 	}
 	if info, err := os.Stat(path); err != nil || !info.IsDir() || filepath.Base(path) != top[0].Name {
 		t.Fatalf("Path = %q (stat err %v), want an existing dir named %q", path, err, top[0].Name)
+	}
+}
+
+func TestSavingIsAnnouncedOnlyForAScanThatCompletes(t *testing.T) {
+	e := newEngine(t)
+	dir, _ := generate(t, 500)
+	var events []string
+	cb := Callbacks{
+		OnProgress: func(model.Progress) { events = append(events, "progress") },
+		OnSaving:   func() { events = append(events, "saving") },
+		OnDone:     func(model.Summary) { events = append(events, "done") },
+	}
+	if _, err := e.StartScan(dir, cb); err != nil {
+		t.Fatal(err)
+	}
+	e.Wait()
+	if n := len(events); n < 3 || events[n-3] != "progress" || events[n-2] != "saving" || events[n-1] != "done" {
+		t.Fatalf("events = %v, want ... progress, saving, done", events)
+	}
+
+	events = nil
+	if _, err := e.StartScan(bigTree, cb); err != nil {
+		t.Fatal(err)
+	}
+	e.Cancel()
+	e.Wait()
+	if slices.Contains(events, "saving") {
+		t.Fatalf("events of a cancelled scan = %v, want no saving", events)
+	}
+}
+
+func TestRescanPrunesTheOlderIndexInTheBackground(t *testing.T) {
+	pruned := make(chan int64, 16)
+	e, err := New(filepath.Join(t.TempDir(), "diskflow.db"), Options{pruned: func(n int64) { pruned <- n }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { e.Close() })
+	dir, _ := generate(t, 500)
+
+	first := scanToEnd(t, e, dir)
+	scanToEnd(t, e, dir)
+	want := first.Files + first.Dirs
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case n := <-pruned:
+			if n == want {
+				return
+			}
+			if n != 0 {
+				t.Fatalf("a pruning pass deleted %d entries, want %d (the first index)", n, want)
+			}
+		case <-timeout:
+			t.Fatalf("the first index (%d entries) was not pruned within 5s", want)
+		}
 	}
 }
