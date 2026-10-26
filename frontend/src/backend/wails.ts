@@ -1,13 +1,28 @@
-import { CancelScan, Children, PickFolder, Root, StartScan } from '../../wailsjs/go/desktop/App'
+import {
+  CancelScan,
+  Children,
+  GetRoot,
+  ListRoots,
+  PickFolder,
+  RemoveRoot,
+  RenameRoot,
+  Root,
+  StartScan,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import type { Backend, Node, Progress, Summary } from './types'
+import type { Backend, Node, Progress, RootInfo, Summary } from './types'
 
 // Event names emitted by internal/desktop/app.go.
 const EVENT_PROGRESS = 'scan:progress'
 const EVENT_DONE = 'scan:done'
 
 export const wailsBackend: Backend = {
-  pickFolder: async () => (await PickFolder()) || null,
+  // Go returns nil when the dialog is closed; the generated types don't say so.
+  pickFolder: async () => ((await PickFolder()) as RootInfo | null) ?? null,
+  listRoots: async () => ((await ListRoots()) as RootInfo[] | null) ?? [],
+  getRoot: async (id) => (await GetRoot(id)) as RootInfo,
+  renameRoot: (id, name) => RenameRoot(id, name),
+  removeRoot: (id) => RemoveRoot(id),
   startScan: (root) => StartScan(root),
   cancelScan: () => CancelScan(),
   // The generated types say model.Node, but Go returns nil for a never-scanned root.

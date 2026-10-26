@@ -91,3 +91,22 @@ type Summary struct {
 	ElapsedMs int64  `json:"elapsedMs"`
 	Error     string `json:"error,omitempty"`
 }
+
+// ScanInfo describes one scan attempt as the catalog stores it.
+type ScanInfo struct {
+	ID         int64  `json:"id"`
+	Status     string `json:"status"`
+	StartedAt  int64  `json:"startedAt"`  // unix seconds
+	FinishedAt int64  `json:"finishedAt"` // 0 while running
+	Progress
+}
+
+// RootInfo is a folder of the catalog with its scans at a glance.
+type RootInfo struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"` // the user's name for it, or the folder's own name
+	Path      string    `json:"path"`
+	CreatedAt int64     `json:"createdAt"`
+	Index     *ScanInfo `json:"index"` // latest completed scan, the one the explorer shows; nil if none
+	Last      *ScanInfo `json:"last"`  // latest attempt, whatever its status; nil if never scanned
+}

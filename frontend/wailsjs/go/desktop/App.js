@@ -10,8 +10,24 @@ export function Children(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['Children'](arg1, arg2, arg3);
 }
 
+export function GetRoot(arg1) {
+  return window['go']['desktop']['App']['GetRoot'](arg1);
+}
+
+export function ListRoots() {
+  return window['go']['desktop']['App']['ListRoots']();
+}
+
 export function PickFolder() {
   return window['go']['desktop']['App']['PickFolder']();
+}
+
+export function RemoveRoot(arg1) {
+  return window['go']['desktop']['App']['RemoveRoot'](arg1);
+}
+
+export function RenameRoot(arg1, arg2) {
+  return window['go']['desktop']['App']['RenameRoot'](arg1, arg2);
 }
 
 export function Root(arg1) {

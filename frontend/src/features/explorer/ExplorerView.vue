@@ -6,8 +6,15 @@ import { flagLabels, isEstimated, showLogical, sizeNote } from './size'
 import TreemapChart from './treemap/TreemapChart.vue'
 import { PAGE_SIZE, useExplorer } from './useExplorer'
 
-const ex = useExplorer(useBackend())
-const { root, trail, children, progress, summary, scanning, error, current, truncated } = ex
+const props = defineProps<{
+  root: string // folder path; the explorer is recreated for another folder
+  name: string
+  autoscan?: boolean // start a scan as soon as the current index is shown
+}>()
+
+const ex = useExplorer(useBackend(), props.root)
+const { trail, children, progress, summary, scanning, error, current, truncated } = ex
+if (props.autoscan) void ex.ready.then(ex.scan)
 
 const STATUS_TEXT = { completed: 'Completado', cancelled: 'Cancelado', failed: 'Falló' } as const
 const hovered = ref<number | null>(null) // shared by the table and the treemap
@@ -20,15 +27,12 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
 <template>
   <main class="explorer">
     <header class="toolbar">
-      <button type="button" :disabled="scanning" @click="ex.pickFolder">Elegir carpeta</button>
-      <button type="button" class="primary" :disabled="!root || scanning" @click="ex.scan">Analizar</button>
+      <RouterLink to="/" class="back">← Inicio</RouterLink>
+      <h1 class="title">{{ name }}</h1>
+      <code class="root" :title="root">{{ root }}</code>
+      <button type="button" class="primary" :disabled="scanning" @click="ex.scan">Analizar</button>
       <button type="button" :disabled="!scanning" @click="ex.cancel">Cancelar</button>
-      <code v-if="root" class="root" :title="root">{{ root }}</code>
     </header>
-
-    <div v-if="!root" class="empty-card">
-      <code class="empty-message" title="Sin contenido por ver">Ninguna carpeta elegida</code>
-    </div>
 
     <p class="status" aria-live="polite">
       <template v-if="progress">
@@ -47,7 +51,7 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <p v-if="root && !trail.length && !scanning" class="empty">
+    <p v-if="!trail.length && !scanning" class="empty">
       Esta carpeta aún no se ha analizado. Pulsa <strong>Analizar</strong>.
     </p>
 
@@ -136,6 +140,14 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
   align-items: center;
   flex-wrap: wrap;
 }
+.back {
+  color: var(--accent);
+  text-decoration: none;
+}
+.title {
+  font-size: 16px;
+  margin: 0;
+}
 .root {
   color: var(--muted);
   overflow: hidden;
@@ -157,19 +169,6 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
 }
 .empty {
   color: var(--muted);
-}
-.empty-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 85dvh;
-  width: 100%;
-  color: var(--muted);
-}
-.empty-message {
-  font-size: 14px;
-  text-align: center;
-  margin: 5rem;
 }
 .crumbs {
   display: flex;

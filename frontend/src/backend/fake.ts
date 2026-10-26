@@ -1,11 +1,13 @@
-import type { Backend, Node, Progress, Summary } from './types'
+import type { Backend, Node, Progress, RootInfo, Summary } from './types'
 
 /**
  * In-memory Backend for tests. children() answers immediately unless the
  * parent is held with hold(), which lets a test decide the order of responses.
  */
 export class FakeBackend implements Backend {
-  picked: string | null = null
+  picked: string | null = null // folder the dialog returns
+  catalog: RootInfo[] = []
+  failRemove: string | null = null
   roots = new Map<string, Node>()
   kids = new Map<number, Node[]>()
   failStart: string | null = null
@@ -19,7 +21,33 @@ export class FakeBackend implements Backend {
   private holding = new Set<number>()
 
   async pickFolder() {
-    return this.picked
+    if (!this.picked) return null
+    const path = this.picked
+    let r = this.catalog.find((c) => c.path === path)
+    if (!r) {
+      r = rootInfo(Math.max(0, ...this.catalog.map((c) => c.id)) + 1, path)
+      this.catalog.push(r)
+    }
+    return { ...r }
+  }
+  async listRoots() {
+    return this.catalog.map((r) => ({ ...r }))
+  }
+  async getRoot(id: number) {
+    const r = this.catalog.find((c) => c.id === id)
+    if (!r) throw 'engine: folder not in the catalog'
+    return { ...r }
+  }
+  async renameRoot(id: number, name: string) {
+    const r = await this.getRoot(id)
+    this.catalog = this.catalog.map((c) =>
+      c.id === id ? { ...r, name: name.trim() || baseName(r.path) } : c,
+    )
+  }
+  async removeRoot(id: number) {
+    if (this.failRemove) throw this.failRemove
+    await this.getRoot(id)
+    this.catalog = this.catalog.filter((c) => c.id !== id)
   }
   async startScan(root: string) {
     if (this.failStart) throw this.failStart // Wails rejects with the Go error string
@@ -83,4 +111,16 @@ export const file = (id: number, name: string, size = 0, diskSize = size, flags 
   diskSize,
   flags,
   files: 1,
+})
+
+const baseName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+
+/** A catalog entry that was never scanned. */
+export const rootInfo = (id: number, path: string, name = baseName(path)): RootInfo => ({
+  id,
+  name,
+  path,
+  createdAt: 0,
+  index: null,
+  last: null,
 })

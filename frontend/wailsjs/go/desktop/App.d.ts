@@ -6,7 +6,15 @@ export function CancelScan():Promise<void>;
 
 export function Children(arg1:string,arg2:number,arg3:number):Promise<Array<model.Node>>;
 
-export function PickFolder():Promise<string>;
+export function GetRoot(arg1:number):Promise<model.RootInfo>;
+
+export function ListRoots():Promise<Array<model.RootInfo>>;
+
+export function PickFolder():Promise<model.RootInfo>;
+
+export function RemoveRoot(arg1:number):Promise<void>;
+
+export function RenameRoot(arg1:number,arg2:string):Promise<void>;
 
 export function Root(arg1:string):Promise<model.Node>;
 
