@@ -13,7 +13,7 @@ const props = defineProps<{
 }>()
 
 const ex = useExplorer(useBackend(), props.root)
-const { trail, children, progress, summary, scanning, error, current, truncated } = ex
+const { trail, children, progress, summary, scanning, saving, error, current, truncated } = ex
 if (props.autoscan) void ex.ready.then(ex.scan)
 
 const STATUS_TEXT = { completed: 'Completado', cancelled: 'Cancelado', failed: 'Falló' } as const
@@ -31,7 +31,16 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
       <h1 class="title">{{ name }}</h1>
       <code class="root" :title="root">{{ root }}</code>
       <button type="button" class="primary" :disabled="scanning" @click="ex.scan">Analizar</button>
-      <button type="button" :disabled="!scanning" @click="ex.cancel">Cancelar</button>
+      <button
+        type="button"
+        :disabled="!scanning || saving"
+        :title="
+          saving ? 'Los resultados ya se están guardando; cancelar ahora perdería el análisis' : undefined
+        "
+        @click="ex.cancel"
+      >
+        Cancelar
+      </button>
     </header>
 
     <p class="status" aria-live="polite">
@@ -42,7 +51,7 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
         >
         <template v-if="progress.errors"> · {{ formatCount(progress.errors) }} sin acceso</template>
       </template>
-      <span v-if="scanning"> — analizando…</span>
+      <span v-if="scanning"> - {{ saving ? 'guardando resultados…' : 'analizando…' }}</span>
       <span v-else-if="summary">
         — {{ STATUS_TEXT[summary.status] }} en {{ (summary.elapsedMs / 1000).toFixed(1) }} s
         <template v-if="summary.error">: {{ summary.error }}</template>

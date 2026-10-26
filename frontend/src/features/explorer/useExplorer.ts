@@ -16,6 +16,7 @@ export function useExplorer(backend: Backend, root: string) {
   const progress = ref<Progress | null>(null)
   const summary = ref<Summary | null>(null)
   const scanning = ref(false)
+  const saving = ref(false) // the scan is past the point where it can be cancelled
   const error = ref('')
 
   const current = computed(() => trail.value.at(-1) ?? null)
@@ -23,8 +24,10 @@ export function useExplorer(backend: Backend, root: string) {
 
   const offs = [
     backend.onProgress((p) => (progress.value = p)),
+    backend.onSaving(() => (saving.value = true)),
     backend.onDone((s) => {
       scanning.value = false
+      saving.value = false
       summary.value = s
       // Only a completed scan replaces the index; otherwise the view stays valid.
       if (s.status === 'completed') void attempt(loadRoot)
@@ -96,6 +99,7 @@ export function useExplorer(backend: Backend, root: string) {
     progress: readonly(progress),
     summary: readonly(summary),
     scanning: readonly(scanning),
+    saving: readonly(saving),
     error: readonly(error),
     current,
     truncated,

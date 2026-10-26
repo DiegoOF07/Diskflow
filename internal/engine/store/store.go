@@ -95,19 +95,12 @@ func (s *Store) migrate() error {
 	return nil
 }
 
-// recoverInterrupted marks scans left "running" by a killed process as failed
-// and drops their partial entries.
+// recoverInterrupted marks scans left "running" by a killed process as failed.
+// Their partial entries are left for Prune.
 func (s *Store) recoverInterrupted() error {
-	return s.inTx(context.Background(), func(tx *sql.Tx) error {
-		if _, err := tx.Exec(
-			"DELETE FROM entries WHERE scan_id IN (SELECT id FROM scan_runs WHERE status = ?)",
-			model.StatusRunning); err != nil {
-			return err
-		}
-		_, err := tx.Exec("UPDATE scan_runs SET status = ?, finished_at = ? WHERE status = ?",
-			model.StatusFailed, time.Now().Unix(), model.StatusRunning)
-		return err
-	})
+	_, err := s.db.Exec("UPDATE scan_runs SET status = ?, finished_at = ? WHERE status = ?",
+		model.StatusFailed, time.Now().Unix(), model.StatusRunning)
+	return err
 }
 
 // inTx runs fn in a transaction, committing on success and rolling back on error.

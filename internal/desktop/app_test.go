@@ -51,7 +51,7 @@ func tree(t *testing.T) string {
 	return dir
 }
 
-func TestStartScanEmitsProgressThenDone(t *testing.T) {
+func TestStartScanEmitsProgressSavingThenDone(t *testing.T) {
 	a, rec := newTestApp(t)
 	if err := a.StartScan(tree(t)); err != nil {
 		t.Fatal(err)
@@ -59,8 +59,8 @@ func TestStartScanEmitsProgressThenDone(t *testing.T) {
 	a.eng.Wait()
 
 	n := len(rec.events)
-	if n < 2 || rec.events[0].name != EventProgress || rec.events[n-1].name != EventDone {
-		t.Fatalf("events = %v, want %s... then %s", rec.events, EventProgress, EventDone)
+	if n < 3 || rec.events[0].name != EventProgress || rec.events[n-2].name != EventSaving || rec.events[n-1].name != EventDone {
+		t.Fatalf("events = %v, want %s... then %s and %s", rec.events, EventProgress, EventSaving, EventDone)
 	}
 	if sum, ok := rec.events[n-1].data.(model.Summary); !ok || sum.Status != model.StatusCompleted {
 		t.Fatalf("done payload = %#v, want a completed model.Summary", rec.events[n-1].data)

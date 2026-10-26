@@ -16,6 +16,7 @@ export class FakeBackend implements Backend {
   cancelled = 0
 
   private progressCbs = new Set<(p: Progress) => void>()
+  private savingCbs = new Set<() => void>()
   private doneCbs = new Set<(s: Summary) => void>()
   private held = new Map<number, () => void>()
   private holding = new Set<number>()
@@ -70,6 +71,10 @@ export class FakeBackend implements Backend {
     this.progressCbs.add(cb)
     return () => this.progressCbs.delete(cb)
   }
+  onSaving(cb: () => void) {
+    this.savingCbs.add(cb)
+    return () => this.savingCbs.delete(cb)
+  }
   onDone(cb: (s: Summary) => void) {
     this.doneCbs.add(cb)
     return () => this.doneCbs.delete(cb)
@@ -85,11 +90,14 @@ export class FakeBackend implements Backend {
   emitProgress(p: Progress) {
     this.progressCbs.forEach((cb) => cb(p))
   }
+  emitSaving() {
+    this.savingCbs.forEach((cb) => cb())
+  }
   emitDone(s: Summary) {
     this.doneCbs.forEach((cb) => cb(s))
   }
   get listeners() {
-    return this.progressCbs.size + this.doneCbs.size
+    return this.progressCbs.size + this.savingCbs.size + this.doneCbs.size
   }
 }
 

@@ -86,31 +86,52 @@ func (s *Store) SetDirTotals(ctx context.Context, scanID int64, totals map[int64
 	return nil
 }
 
-// FinishScan closes a scan with its final status and counters.
-//   - completed: becomes the active index and older entries of the same root
-//     are deleted (their scan_runs rows stay as history).
-//   - cancelled/failed: its partial entries are deleted, so a partial index
-//     is never presented as current.
+// FinishScan closes a scan with its final status and counters. A completed
+// scan becomes the active index of its root. The entries no longer needed (the
+// older index, or this scan's own if it did not complete) are left for Prune:
+// deleting millions of rows here would keep the user waiting for nothing.
 func (s *Store) FinishScan(ctx context.Context, scanID int64, status string, p model.Progress) error {
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `UPDATE scan_runs
-			SET status = ?, finished_at = ?, files = ?, dirs = ?, bytes = ?, disk_bytes = ?, errors = ?
-			WHERE id = ?`,
-			status, time.Now().Unix(), p.Files, p.Dirs, p.Bytes, p.DiskBytes, p.Errors, scanID); err != nil {
-			return err
-		}
-		if status != model.StatusCompleted {
-			_, err := tx.ExecContext(ctx, "DELETE FROM entries WHERE scan_id = ?", scanID)
-			return err
-		}
-		_, err := tx.ExecContext(ctx, `DELETE FROM entries WHERE scan_id IN (
-			SELECT id FROM scan_runs
-			WHERE root = (SELECT root FROM scan_runs WHERE id = ?) AND id < ?)`,
-			scanID, scanID)
-		return err
-	})
+	_, err := s.db.ExecContext(ctx, `UPDATE scan_runs
+		SET status = ?, finished_at = ?, files = ?, dirs = ?, bytes = ?, disk_bytes = ?, errors = ?
+		WHERE id = ?`,
+		status, time.Now().Unix(), p.Files, p.Dirs, p.Bytes, p.DiskBytes, p.Errors, scanID)
 	if err != nil {
 		return fmt.Errorf("store: finish scan: %w", err)
 	}
 	return nil
+}
+
+// pruneChunk is how many entries one Prune statement deletes. Short writes let
+// the UI's queries and a new scan's inserts take turns with the pruning.
+var pruneChunk int64 = 10_000
+
+// Prune deletes, in chunks, the entries nobody will read again: those of every
+// finished scan except the latest completed one of each root (scan_runs rows
+// stay as history). A scan never leaves that set once in it, so each chunk can
+// run on its own. Prune returns how many entries it deleted and stops between
+// chunks when ctx is cancelled; the next call resumes.
+func (s *Store) Prune(ctx context.Context) (int64, error) {
+	var deleted int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return deleted, err
+		}
+		res, err := s.db.ExecContext(ctx, `DELETE FROM entries WHERE (scan_id, id) IN (
+			SELECT scan_id, id FROM entries WHERE scan_id IN (
+				SELECT id FROM scan_runs WHERE status <> ? AND id NOT IN (
+					SELECT MAX(id) FROM scan_runs WHERE status = ? GROUP BY root))
+			LIMIT ?)`,
+			model.StatusRunning, model.StatusCompleted, pruneChunk)
+		if err != nil {
+			return deleted, fmt.Errorf("store: prune: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return deleted, fmt.Errorf("store: prune: %w", err)
+		}
+		deleted += n
+		if n < pruneChunk {
+			return deleted, nil
+		}
+	}
 }

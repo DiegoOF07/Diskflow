@@ -30,13 +30,19 @@ const ProgressInterval = 100 * time.Millisecond
 // Options tunes the engine. Zero values take the defaults.
 type Options struct {
 	Workers int // walker goroutines (default: CPUs, at most 8)
+
+	pruned func(deleted int64) // test hook, called after each pruning pass
 }
 
 // Callbacks receive scan events. They run on the engine's goroutine, so they
 // must return quickly and must not call StartScan.
 type Callbacks struct {
-	OnProgress func(model.Progress) // at most every ProgressInterval, plus once at the end
-	OnDone     func(model.Summary)  // exactly once, after the last OnProgress
+	OnProgress func(model.Progress) // at most every ProgressInterval, plus once when the walk ends
+	// OnSaving announces that the walk is over and the results are being
+	// saved, which can take a while on big trees. From then on the scan can no
+	// longer be cancelled. Only scans about to complete get it.
+	OnSaving func()
+	OnDone   func(model.Summary) // exactly once, last
 }
 
 type Engine struct {
@@ -49,6 +55,10 @@ type Engine struct {
 	running string             // root key of the running scan
 	done    chan struct{}      // closed when the current scan has finished
 	closed  bool
+
+	prune      chan struct{} // asks the pruner for one more pass; capacity 1
+	stopPrune  context.CancelFunc
+	prunerDone chan struct{}
 }
 
 // New opens the engine with its database at dbPath, creating the directory if needed.
@@ -64,21 +74,55 @@ func New(dbPath string, opts Options) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{
-		st:    st,
-		opts:  opts,
-		dbDir: foldCase(filepath.Dir(dbPath), caseInsensitiveFS),
-	}, nil
+	ctx, stop := context.WithCancel(context.Background())
+	e := &Engine{
+		st:         st,
+		opts:       opts,
+		dbDir:      foldCase(filepath.Dir(dbPath), caseInsensitiveFS),
+		prune:      make(chan struct{}, 1),
+		stopPrune:  stop,
+		prunerDone: make(chan struct{}),
+	}
+	go e.pruneLoop(ctx)
+	e.requestPrune() // leftovers of a previous process
+	return e, nil
 }
 
-// Close cancels a running scan, waits for it and closes the database.
+// Close cancels a running scan and the pruning, waits for both and closes the database.
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	e.closed = true
 	e.mu.Unlock()
 	e.Cancel()
 	e.Wait()
+	e.stopPrune()
+	<-e.prunerDone
 	return e.st.Close()
+}
+
+// pruneLoop deletes the entries of obsolete scans in the background, so a scan
+// ends without waiting for the old index to go. Requests that arrive during a
+// pass collapse into one more pass.
+func (e *Engine) pruneLoop(ctx context.Context) {
+	defer close(e.prunerDone)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-e.prune:
+		}
+		// On failure the entries stay and the next request retries them.
+		if n, err := e.st.Prune(ctx); err == nil && e.opts.pruned != nil {
+			e.opts.pruned(n)
+		}
+	}
+}
+
+func (e *Engine) requestPrune() {
+	select {
+	case e.prune <- struct{}{}:
+	default: // a pass is already pending
+	}
 }
 
 // StartScan validates root and scans it in the background. It returns the new
@@ -119,6 +163,9 @@ func (e *Engine) StartScan(root string, cb Callbacks) (int64, error) {
 func withDefaults(cb Callbacks) Callbacks {
 	if cb.OnProgress == nil {
 		cb.OnProgress = func(model.Progress) {}
+	}
+	if cb.OnSaving == nil {
+		cb.OnSaving = func() {}
 	}
 	if cb.OnDone == nil {
 		cb.OnDone = func(model.Summary) {}

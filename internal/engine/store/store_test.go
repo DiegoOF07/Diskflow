@@ -282,8 +282,8 @@ func TestNonCompletedScansKeepPreviousIndex(t *testing.T) {
 			if got, _, _ := s.ActiveScan(ctx, "/r"); got != previous {
 				t.Fatalf("ActiveScan = %d, want previous %d", got, previous)
 			}
-			if n := countEntries(t, s, id); n != 0 {
-				t.Fatalf("%s scan kept %d entries", status, n)
+			if n, err := s.Prune(ctx); err != nil || n != 1 {
+				t.Fatalf("Prune = %d, %v; want the partial entry deleted", n, err)
 			}
 			if n := countEntries(t, s, previous); n != 3 {
 				t.Fatalf("previous index has %d entries, want 3", n)
@@ -292,20 +292,63 @@ func TestNonCompletedScansKeepPreviousIndex(t *testing.T) {
 	}
 }
 
-func TestCompletedScanPrunesOlderEntriesOfSameRoot(t *testing.T) {
+func TestFinishScanLeavesOlderEntriesToPrune(t *testing.T) {
 	s, _ := openTemp(t)
 	older := completeScan(t, s, "/r")
 	other := completeScan(t, s, "/other")
 	completeScan(t, s, "/r")
 
-	if n := countEntries(t, s, older); n != 0 {
-		t.Fatalf("older scan of the same root kept %d entries", n)
+	// Deleting a big index takes long, so finishing a scan never does it.
+	if n := countEntries(t, s, older); n != 3 {
+		t.Fatalf("FinishScan deleted the older index: %d entries left, want 3", n)
+	}
+	if n, err := s.Prune(ctx); err != nil || n != 3 {
+		t.Fatalf("Prune = %d, %v; want the 3 older entries deleted", n, err)
 	}
 	if n := countEntries(t, s, other); n != 3 {
 		t.Fatalf("scan of another root has %d entries, want 3", n)
 	}
 	if st := scanStatus(t, s, older); st != model.StatusCompleted {
 		t.Fatalf("older scan_runs row status = %q, want it kept as completed", st)
+	}
+	if n, err := s.Prune(ctx); err != nil || n != 0 {
+		t.Fatalf("second Prune = %d, %v; want nothing left to delete", n, err)
+	}
+}
+
+func TestPruneKeepsRunningScan(t *testing.T) {
+	s, _ := openTemp(t)
+	id, _ := s.BeginScan(ctx, "/r")
+	s.InsertEntries(ctx, id, []model.Entry{{ID: 1, Name: "/r", Kind: model.KindDir}})
+
+	if n, err := s.Prune(ctx); err != nil || n != 0 {
+		t.Fatalf("Prune = %d, %v; want the running scan untouched", n, err)
+	}
+	if n := countEntries(t, s, id); n != 1 {
+		t.Fatalf("running scan has %d entries, want 1", n)
+	}
+}
+
+func TestPruneDeletesInChunksAndStopsOnCancel(t *testing.T) {
+	defer func(n int64) { pruneChunk = n }(pruneChunk)
+	pruneChunk = 2
+
+	s, _ := openTemp(t)
+	id, _ := s.BeginScan(ctx, "/r")
+	var entries []model.Entry
+	for i := int64(1); i <= 5; i++ {
+		entries = append(entries, model.Entry{ID: i, ParentID: i - 1, Name: fmt.Sprint(i), Kind: model.KindDir})
+	}
+	s.InsertEntries(ctx, id, entries)
+	s.FinishScan(ctx, id, model.StatusCancelled, model.Progress{})
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.Prune(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Prune with a cancelled context: err = %v, want context.Canceled", err)
+	}
+	if n, err := s.Prune(ctx); err != nil || n != 5 {
+		t.Fatalf("Prune = %d, %v; want all 5 entries deleted in chunks of 2", n, err)
 	}
 }
 
@@ -323,8 +366,8 @@ func TestOpenRecoversInterruptedScan(t *testing.T) {
 	if st := scanStatus(t, s2, id); st != model.StatusFailed {
 		t.Fatalf("status = %q, want failed", st)
 	}
-	if n := countEntries(t, s2, id); n != 0 {
-		t.Fatalf("interrupted scan kept %d entries", n)
+	if n, err := s2.Prune(ctx); err != nil || n != 1 {
+		t.Fatalf("Prune = %d, %v; want the interrupted scan's entry deleted", n, err)
 	}
 }
 
