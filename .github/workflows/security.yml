@@ -28,7 +28,10 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./internal/... ./cmd/...
       # wails dev builds with the dev tag, which links its dev server (Echo, x/net).
+      # On Linux that tag also pulls Wails' GTK code (cgo), so analyse the Windows build we ship.
       - name: govulncheck (dev build)
+        env:
+          GOOS: windows
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -tags dev ./internal/... ./cmd/...
 
   pnpm-audit:
