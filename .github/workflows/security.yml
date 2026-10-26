@@ -27,6 +27,9 @@ jobs:
       # Fails only when our code reaches a vulnerable symbol, including the standard library.
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./internal/... ./cmd/...
+      # wails dev builds with the dev tag, which links its dev server (Echo, x/net).
+      - name: govulncheck (dev build)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -tags dev ./internal/... ./cmd/...
 
   pnpm-audit:
     name: pnpm audit
