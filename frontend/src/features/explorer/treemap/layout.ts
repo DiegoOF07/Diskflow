@@ -41,6 +41,7 @@ export function groupOthers(children: readonly Node[], parent: Pick<Node, 'size'
       diskSize: rest,
       flags: 0,
       files: otherFiles,
+      modified: 0,
     })
   }
   return kept

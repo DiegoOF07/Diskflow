@@ -12,7 +12,23 @@ export interface Node {
   diskSize: number // space allocated on disk; what the UI ranks by
   flags: number // a directory carries the union of its subtree's flags
   files: number // files in the subtree (1 for a file)
+  modified: number // unix seconds; 0 if unknown
   err?: string
+}
+
+export type SortKey = 'size' | 'name' | 'modified'
+
+/** One page of a directory's children (model.ListQuery). */
+export interface ListQuery {
+  sort: SortKey
+  desc: boolean
+  offset: number
+  limit: number // the backend caps it at 500
+}
+
+export interface Page {
+  items: Node[]
+  total: number // children in the whole directory
 }
 
 export interface Progress {
@@ -71,7 +87,9 @@ export interface Backend {
   cancelScan(): Promise<void>
   /** Resolves to null if root has never been scanned. */
   root(root: string): Promise<Node | null>
+  /** Up to limit children, biggest on disk first. */
   children(root: string, parentId: number, limit: number): Promise<Node[]>
+  listChildren(root: string, parentId: number, q: ListQuery): Promise<Page>
   onProgress(cb: (p: Progress) => void): Off
   /** The walk is over and the results are being saved; the scan can no longer be cancelled. */
   onSaving(cb: () => void): Off

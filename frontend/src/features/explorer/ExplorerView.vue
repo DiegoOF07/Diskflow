@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
-import { formatBytes, formatCount, formatPercent } from './format'
+import type { Node, SortKey } from '../../backend/types'
+import { formatBytes, formatCount, formatDate, formatPercent } from './format'
 import { flagLabels, isEstimated, showLogical, sizeNote } from './size'
 import TreemapChart from './treemap/TreemapChart.vue'
-import { PAGE_SIZE, useExplorer } from './useExplorer'
+import { useExplorer } from './useExplorer'
 
 const props = defineProps<{
   root: string // folder path; the explorer is recreated for another folder
@@ -13,7 +14,8 @@ const props = defineProps<{
 }>()
 
 const ex = useExplorer(useBackend(), props.root)
-const { trail, children, progress, summary, scanning, saving, error, current, truncated } = ex
+const { trail, children, rows, total, sort, progress, summary, scanning, saving, error, current, hasMore } =
+  ex
 if (props.autoscan) void ex.ready.then(ex.scan)
 
 const STATUS_TEXT = { completed: 'Completado', cancelled: 'Cancelado', failed: 'Falló' } as const
@@ -22,6 +24,30 @@ watch(current, () => (hovered.value = null))
 const share = (diskSize: number) => (current.value?.diskSize ? diskSize / current.value.diskSize : 0)
 const logicalCol = computed(() => showLogical(current.value))
 const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0]))
+
+const ariaSort = (key: SortKey) =>
+  sort.value.key !== key ? 'none' : sort.value.desc ? 'descending' : 'ascending'
+const arrow = (key: SortKey) => (sort.value.key !== key ? '' : sort.value.desc ? ' ↓' : ' ↑')
+
+// Keyboard: each row is one tab stop; arrows move between rows, Enter opens a
+// folder and Backspace goes up a level.
+function onRowKey(e: KeyboardEvent, n: Node) {
+  const row = e.currentTarget as HTMLElement
+  if (e.key === 'Enter') void ex.open(n)
+  else if (e.key === 'ArrowDown') (row.nextElementSibling as HTMLElement | null)?.focus()
+  else if (e.key === 'ArrowUp') (row.previousElementSibling as HTMLElement | null)?.focus()
+  else return
+  e.preventDefault()
+}
+function onKey(e: KeyboardEvent) {
+  const t = e.target as HTMLElement
+  if (e.key !== 'Backspace' || t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
+    return
+  e.preventDefault()
+  void ex.up()
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
@@ -96,26 +122,37 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
       @open="ex.open"
     />
 
-    <table v-if="children.length">
+    <table v-if="rows.length">
       <thead>
         <tr>
-          <th scope="col">Nombre</th>
-          <th scope="col" class="num">En disco</th>
+          <th scope="col" :aria-sort="ariaSort('name')">
+            <button type="button" class="sort" @click="ex.sortBy('name')">Nombre{{ arrow('name') }}</button>
+          </th>
+          <th scope="col" class="num" :aria-sort="ariaSort('size')">
+            <button type="button" class="sort" @click="ex.sortBy('size')">En disco{{ arrow('size') }}</button>
+          </th>
           <th v-if="logicalCol" scope="col" class="num">Lógico</th>
           <th scope="col" class="num">% de la carpeta</th>
           <th scope="col" class="num">Archivos</th>
+          <th scope="col" class="num" :aria-sort="ariaSort('modified')">
+            <button type="button" class="sort" @click="ex.sortBy('modified')">
+              Modificado{{ arrow('modified') }}
+            </button>
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr
-          v-for="n in children"
+          v-for="n in rows"
           :key="n.id"
+          tabindex="0"
           :class="{ hovered: hovered === n.id }"
           @mouseenter="hovered = n.id"
           @mouseleave="hovered = null"
+          @keydown="onRowKey($event, n)"
         >
           <td class="name">
-            <button v-if="n.kind === 'dir'" type="button" class="link" @click="ex.open(n)">
+            <button v-if="n.kind === 'dir'" type="button" class="link" tabindex="-1" @click="ex.open(n)">
               📁 {{ n.name }}
             </button>
             <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
@@ -131,11 +168,15 @@ const estimated = computed(() => !!trail.value[0] && isEstimated(trail.value[0])
             <span class="pct">{{ formatPercent(n.diskSize, current?.diskSize ?? 0) }}</span>
           </td>
           <td class="num">{{ formatCount(n.files) }}</td>
+          <td class="num date">{{ formatDate(n.modified) }}</td>
         </tr>
       </tbody>
     </table>
     <p v-else-if="trail.length" class="empty">Carpeta vacía.</p>
-    <p v-if="truncated" class="status">Se muestran los {{ PAGE_SIZE }} elementos más grandes.</p>
+    <p v-if="rows.length" class="status more">
+      Mostrando {{ formatCount(rows.length) }} de {{ formatCount(total) }}
+      <button v-if="hasMore" type="button" @click="ex.loadMore">Cargar más</button>
+    </p>
   </main>
 </template>
 
@@ -243,8 +284,30 @@ tr.hovered {
   color: var(--muted);
   cursor: help;
 }
-.logical {
+.logical,
+.date {
   color: var(--muted);
+}
+th .sort {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+th[aria-sort='ascending'],
+th[aria-sort='descending'] {
+  color: var(--fg);
+}
+tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.more {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 .notice {
   background: var(--accent-soft);

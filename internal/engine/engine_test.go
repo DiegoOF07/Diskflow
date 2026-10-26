@@ -369,3 +369,25 @@ func TestRescanPrunesTheOlderIndexInTheBackground(t *testing.T) {
 		}
 	}
 }
+
+func TestListChildrenPagesTheActiveIndex(t *testing.T) {
+	e := newEngine(t)
+	dir, _ := generate(t, 500)
+	scanToEnd(t, e, dir)
+	root, _ := e.Root(dir)
+
+	first, err := e.ListChildren(dir, root.ID, model.ListQuery{Sort: model.SortName, Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, _ := e.Children(dir, root.ID, 500)
+	if first.Total != int64(len(all)) || len(first.Items) != 2 {
+		t.Fatalf("page = %d items of %d, want 2 of %d", len(first.Items), first.Total, len(all))
+	}
+	if first.Items[0].Name > first.Items[1].Name {
+		t.Fatalf("items %q, %q are not sorted by name", first.Items[0].Name, first.Items[1].Name)
+	}
+	if _, err := e.ListChildren(dir, root.ID, model.ListQuery{Sort: "bogus"}); !errors.Is(err, ErrBadSort) {
+		t.Fatalf("bad sort: err = %v, want ErrBadSort", err)
+	}
+}

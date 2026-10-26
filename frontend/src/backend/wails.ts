@@ -2,6 +2,7 @@ import {
   CancelScan,
   Children,
   GetRoot,
+  ListChildren,
   ListRoots,
   PickFolder,
   RemoveRoot,
@@ -10,7 +11,7 @@ import {
   StartScan,
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import type { Backend, Node, Progress, RootInfo, Summary } from './types'
+import type { Backend, Node, Page, Progress, RootInfo, Summary } from './types'
 
 // Event names emitted by internal/desktop/app.go.
 const EVENT_PROGRESS = 'scan:progress'
@@ -29,6 +30,7 @@ export const wailsBackend: Backend = {
   // The generated types say model.Node, but Go returns nil for a never-scanned root.
   root: async (root) => ((await Root(root)) as Node | null) ?? null,
   children: async (root, parentId, limit) => (await Children(root, parentId, limit)) as Node[],
+  listChildren: async (root, parentId, q) => (await ListChildren(root, parentId, q)) as Page,
   // EventsOn returns its own unsubscribe function; EventsOff would remove every listener of the event.
   onProgress: (cb) => EventsOn(EVENT_PROGRESS, (p: Progress) => cb(p)),
   onSaving: (cb) => EventsOn(EVENT_SAVING, () => cb()),

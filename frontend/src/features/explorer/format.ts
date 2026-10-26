@@ -33,3 +33,17 @@ export function formatAgo(unixSeconds: number, nowSeconds = Date.now() / 1000): 
   if (s < 86400) return relative.format(-Math.floor(s / 3600), 'hour')
   return relative.format(-Math.floor(s / 86400), 'day')
 }
+
+// Spelled out because dateStyle 'short' gives a two-digit year in Spanish.
+const dateTime = new Intl.DateTimeFormat('es', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+/** Formats a unix time as a local date and time, or "—" when it is unknown (0). */
+export function formatDate(unixSeconds: number): string {
+  return unixSeconds ? dateTime.format(unixSeconds * 1000) : '—'
+}

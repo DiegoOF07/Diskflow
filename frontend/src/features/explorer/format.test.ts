@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAgo, formatBytes, formatCount, formatPercent } from './format'
+import { formatAgo, formatBytes, formatCount, formatDate, formatPercent } from './format'
 
 describe('formatBytes', () => {
   it.each([
@@ -39,5 +39,16 @@ describe('formatAgo', () => {
     [now - 10 * 86400, 'hace 10 días'],
   ])('%d -> %s', (then, want) => {
     expect(formatAgo(then, now)).toBe(want)
+  })
+})
+
+describe('formatDate', () => {
+  it('shows a dash for an unknown date', () => {
+    expect(formatDate(0)).toBe('—')
+  })
+
+  it('shows the local date and time', () => {
+    const unix = new Date(2026, 9, 26, 14, 5).getTime() / 1000
+    expect(formatDate(unix)).toMatch(/26\/10\/2026.*14:05/)
   })
 })
