@@ -89,6 +89,10 @@ func TestRootAndChildrenAfterScan(t *testing.T) {
 	if err != nil || len(kids) != 5 {
 		t.Fatalf("Children = %d nodes, %v; want 5", len(kids), err)
 	}
+	page, err := a.ListChildren(dir, root.ID, model.ListQuery{Sort: model.SortName, Offset: 1, Limit: 3})
+	if err != nil || len(page.Items) != 3 || page.Total < 4 {
+		t.Fatalf("ListChildren = %d of %d, %v; want 3 of at least 4", len(page.Items), page.Total, err)
+	}
 }
 
 func TestEngineThatFailedToOpen(t *testing.T) {

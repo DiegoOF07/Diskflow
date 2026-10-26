@@ -22,6 +22,7 @@ var (
 	ErrNoScan      = errors.New("engine: no completed scan for this root")
 	ErrClosed      = errors.New("engine: closed")
 	ErrNotDir      = scan.ErrNotDir // re-exported so callers only import engine
+	ErrBadSort     = store.ErrBadSort
 )
 
 // ProgressInterval is the minimum time between two OnProgress calls.
@@ -208,6 +209,15 @@ func (e *Engine) Children(root string, parentID int64, limit int) ([]model.Node,
 		return nil, err
 	}
 	return e.st.Children(context.Background(), id, parentID, limit)
+}
+
+// ListChildren returns one page of parentID's children in the active index of root.
+func (e *Engine) ListChildren(root string, parentID int64, q model.ListQuery) (model.Page, error) {
+	id, err := e.activeScan(root)
+	if err != nil {
+		return model.Page{}, err
+	}
+	return e.st.ListChildren(context.Background(), id, parentID, q)
 }
 
 // TopDirs returns the biggest directories in the active index of root.

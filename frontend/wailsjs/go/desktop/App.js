@@ -14,6 +14,10 @@ export function GetRoot(arg1) {
   return window['go']['desktop']['App']['GetRoot'](arg1);
 }
 
+export function ListChildren(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['ListChildren'](arg1, arg2, arg3);
+}
+
 export function ListRoots() {
   return window['go']['desktop']['App']['ListRoots']();
 }

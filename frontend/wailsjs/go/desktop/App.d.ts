@@ -8,6 +8,8 @@ export function Children(arg1:string,arg2:number,arg3:number):Promise<Array<mode
 
 export function GetRoot(arg1:number):Promise<model.RootInfo>;
 
+export function ListChildren(arg1:string,arg2:number,arg3:model.ListQuery):Promise<model.Page>;
+
 export function ListRoots():Promise<Array<model.RootInfo>>;
 
 export function PickFolder():Promise<model.RootInfo>;

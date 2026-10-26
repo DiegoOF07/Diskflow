@@ -1,8 +1,9 @@
-import type { Backend, Node, Progress, RootInfo, Summary } from './types'
+import type { Backend, ListQuery, Node, Page, Progress, RootInfo, Summary } from './types'
 
 /**
- * In-memory Backend for tests. children() answers immediately unless the
- * parent is held with hold(), which lets a test decide the order of responses.
+ * In-memory Backend for tests. children() and listChildren() answer immediately
+ * unless the parent is held with hold(), which lets a test decide the order of
+ * responses.
  */
 export class FakeBackend implements Backend {
   picked: string | null = null // folder the dialog returns
@@ -18,7 +19,7 @@ export class FakeBackend implements Backend {
   private progressCbs = new Set<(p: Progress) => void>()
   private savingCbs = new Set<() => void>()
   private doneCbs = new Set<(s: Summary) => void>()
-  private held = new Map<number, () => void>()
+  private held = new Map<number, (() => void)[]>() // several requests can wait on one parent
   private holding = new Set<number>()
 
   async pickFolder() {
@@ -61,11 +62,32 @@ export class FakeBackend implements Backend {
     return this.roots.get(root) ?? null
   }
   async children(_root: string, parentId: number, limit: number) {
+    const kids = await this.kidsOf(parentId)
+    return [...kids].sort((a, b) => b.diskSize - a.diskSize || a.id - b.id).slice(0, limit)
+  }
+  async listChildren(_root: string, parentId: number, q: ListQuery): Promise<Page> {
+    const kids = await this.kidsOf(parentId)
+    const key = {
+      size: (n: Node) => n.diskSize,
+      name: (n: Node) => n.name.toLowerCase(),
+      modified: (n: Node) => n.modified,
+    }[q.sort]
+    const dir = q.desc ? -1 : 1
+    const sorted = [...kids].sort((a, b) => {
+      const ka = key(a)
+      const kb = key(b)
+      return (ka < kb ? -dir : ka > kb ? dir : 0) || a.id - b.id // ties by id, like the store
+    })
+    return { items: sorted.slice(q.offset, q.offset + q.limit), total: kids.length }
+  }
+  private async kidsOf(parentId: number) {
     if (this.holding.has(parentId)) {
-      await new Promise<void>((resolve) => this.held.set(parentId, resolve))
+      await new Promise<void>((resolve) =>
+        this.held.set(parentId, [...(this.held.get(parentId) ?? []), resolve]),
+      )
     }
     if (this.failChildren) throw this.failChildren
-    return (this.kids.get(parentId) ?? []).slice(0, limit)
+    return this.kids.get(parentId) ?? []
   }
   onProgress(cb: (p: Progress) => void) {
     this.progressCbs.add(cb)
@@ -85,7 +107,8 @@ export class FakeBackend implements Backend {
   }
   release(parentId: number) {
     this.holding.delete(parentId)
-    this.held.get(parentId)?.()
+    this.held.get(parentId)?.forEach((resolve) => resolve())
+    this.held.delete(parentId)
   }
   emitProgress(p: Progress) {
     this.progressCbs.forEach((cb) => cb(p))
@@ -110,6 +133,7 @@ export const dir = (id: number, name: string, size = 0, diskSize = size, flags =
   diskSize,
   flags,
   files: 0,
+  modified: 0,
 })
 export const file = (id: number, name: string, size = 0, diskSize = size, flags = 0): Node => ({
   id,
@@ -119,6 +143,7 @@ export const file = (id: number, name: string, size = 0, diskSize = size, flags 
   diskSize,
   flags,
   files: 1,
+  modified: 0,
 })
 
 const baseName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path

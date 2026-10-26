@@ -159,6 +159,15 @@ func (a *App) Root(root string) (*model.Node, error) {
 	return &n, nil
 }
 
+// ListChildren returns one page of parentID's children, sorted as q asks.
+func (a *App) ListChildren(root string, parentID int64, q model.ListQuery) (model.Page, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return model.Page{}, err
+	}
+	return eng.ListChildren(root, parentID, q)
+}
+
 // Children returns up to limit children of parentID, biggest first.
 func (a *App) Children(root string, parentID int64, limit int) ([]model.Node, error) {
 	eng, err := a.engine()

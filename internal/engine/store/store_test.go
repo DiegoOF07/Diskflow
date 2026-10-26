@@ -241,6 +241,111 @@ func TestChildrenLimitIsClamped(t *testing.T) {
 	}
 }
 
+// listScan stores a folder with five children whose names, sizes and dates
+// each give a different order. "b" and "B" tie on size and date.
+func listScan(t *testing.T, s *Store) int64 {
+	t.Helper()
+	id, _ := s.BeginScan(ctx, "/r")
+	err := s.InsertEntries(ctx, id, []model.Entry{
+		{ID: 1, Name: "/r", Kind: model.KindDir},
+		{ID: 2, ParentID: 1, Name: "c", Kind: model.KindFile, DiskSize: 300, ModTime: 10},
+		{ID: 3, ParentID: 1, Name: "a", Kind: model.KindFile, DiskSize: 100, ModTime: 30},
+		{ID: 4, ParentID: 1, Name: "b", Kind: model.KindDir, DiskSize: 200, ModTime: 20},
+		{ID: 5, ParentID: 1, Name: "B", Kind: model.KindFile, DiskSize: 200, ModTime: 20},
+		{ID: 6, ParentID: 1, Name: "d", Kind: model.KindFile, DiskSize: 50, ModTime: 40},
+		{ID: 7, ParentID: 4, Name: "inside", Kind: model.KindFile, DiskSize: 200},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func names(nodes []model.Node) []string {
+	out := make([]string, len(nodes))
+	for i, n := range nodes {
+		out[i] = n.Name
+	}
+	return out
+}
+
+func TestListChildrenSorts(t *testing.T) {
+	s, _ := openTemp(t)
+	id := listScan(t, s)
+	for _, tt := range []struct {
+		sort string
+		desc bool
+		want []string
+	}{
+		{model.SortSize, true, []string{"c", "b", "B", "a", "d"}},
+		{model.SortSize, false, []string{"d", "a", "b", "B", "c"}},
+		{model.SortName, false, []string{"a", "b", "B", "c", "d"}}, // case-insensitive; ties by id
+		{model.SortName, true, []string{"d", "c", "b", "B", "a"}},
+		{model.SortModified, true, []string{"d", "a", "b", "B", "c"}},
+		{model.SortModified, false, []string{"c", "b", "B", "a", "d"}},
+	} {
+		page, err := s.ListChildren(ctx, id, 1, model.ListQuery{Sort: tt.sort, Desc: tt.desc, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := names(page.Items); !slices.Equal(got, tt.want) || page.Total != 5 {
+			t.Errorf("sort=%s desc=%v: %v (total %d), want %v (total 5)", tt.sort, tt.desc, got, page.Total, tt.want)
+		}
+	}
+}
+
+func TestListChildrenPagesWithoutGapsOrRepeats(t *testing.T) {
+	s, _ := openTemp(t)
+	id := listScan(t, s)
+	var got []string
+	for offset := 0; offset < 5; offset += 2 {
+		page, err := s.ListChildren(ctx, id, 1, model.ListQuery{Sort: model.SortName, Offset: offset, Limit: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Total != 5 {
+			t.Fatalf("offset %d: total = %d, want 5", offset, page.Total)
+		}
+		got = append(got, names(page.Items)...)
+	}
+	if want := []string{"a", "b", "B", "c", "d"}; !slices.Equal(got, want) {
+		t.Fatalf("pages = %v, want %v", got, want)
+	}
+}
+
+func TestListChildrenRejectsUnknownSort(t *testing.T) {
+	s, _ := openTemp(t)
+	id := listScan(t, s)
+	// The sort key picks an ORDER BY from a fixed list: it never reaches the SQL.
+	if _, err := s.ListChildren(ctx, id, 1, model.ListQuery{Sort: "name; DROP TABLE entries", Limit: 10}); !errors.Is(err, ErrBadSort) {
+		t.Fatalf("err = %v, want ErrBadSort", err)
+	}
+}
+
+func TestListChildrenClampsOffsetAndLimit(t *testing.T) {
+	s, _ := openTemp(t)
+	id := listScan(t, s)
+	page, err := s.ListChildren(ctx, id, 1, model.ListQuery{Sort: model.SortSize, Desc: true, Offset: -3, Limit: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(page.Items); !slices.Equal(got, []string{"c"}) {
+		t.Fatalf("items = %v, want [c]: offset clamped to 0 and limit to 1", got)
+	}
+}
+
+func TestNodesCarryModificationTime(t *testing.T) {
+	s, _ := openTemp(t)
+	id := listScan(t, s)
+	kids, err := s.Children(ctx, id, 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kids[0].Name != "c" || kids[0].Modified != 10 {
+		t.Fatalf("first child = %+v, want c with Modified=10", kids[0])
+	}
+}
+
 func TestTopDirsExcludesRootAndFiles(t *testing.T) {
 	s, _ := openTemp(t)
 	id, _ := s.BeginScan(ctx, "/r")

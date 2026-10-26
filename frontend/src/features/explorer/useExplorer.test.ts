@@ -2,7 +2,7 @@ import { effectScope } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { dir, FakeBackend, file } from '../../backend/fake'
 import type { Summary } from '../../backend/types'
-import { useExplorer } from './useExplorer'
+import { PAGE_SIZE, useExplorer } from './useExplorer'
 
 const ROOT = 'C:\\work'
 const flush = () => new Promise((r) => setTimeout(r, 0))
@@ -144,6 +144,84 @@ describe('navigation', () => {
     await ex.open(ex.children.value[0])
     expect(ex.error.value).toBe('store: children: disk I/O error')
     expect(ex.trail.value).toHaveLength(1)
+  })
+})
+
+describe('table', () => {
+  const rowNames = (ex: ReturnType<typeof setup>) => ex.rows.value.map((n) => n.name)
+
+  beforeEach(() => {
+    backend.kids.set(1, [file(3, 'b.txt', 300), dir(2, 'C', 200), file(4, 'a.txt', 100)])
+  })
+
+  it('starts biggest first and sorts without reordering the treemap', async () => {
+    const ex = setup()
+    await ex.ready
+    expect(rowNames(ex)).toEqual(['b.txt', 'C', 'a.txt'])
+    expect(ex.total.value).toBe(3)
+
+    await ex.sortBy('name')
+    expect(ex.sort.value).toEqual({ key: 'name', desc: false })
+    expect(rowNames(ex)).toEqual(['a.txt', 'b.txt', 'C'])
+    expect(ex.children.value.map((n) => n.name)).toEqual(['b.txt', 'C', 'a.txt'])
+  })
+
+  it('flips the direction when the same column is chosen again', async () => {
+    const ex = setup()
+    await ex.ready
+    await ex.sortBy('size')
+    expect(ex.sort.value).toEqual({ key: 'size', desc: false })
+    expect(rowNames(ex)).toEqual(['a.txt', 'C', 'b.txt'])
+  })
+
+  it('keeps the order while navigating', async () => {
+    backend.kids.set(2, [file(5, 'z', 900), file(6, 'y', 1)])
+    const ex = setup()
+    await ex.ready
+    await ex.sortBy('name')
+    await ex.open(dir(2, 'C', 200))
+    expect(rowNames(ex)).toEqual(['y', 'z'])
+  })
+
+  it('loads more rows until the folder is complete', async () => {
+    const many = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => file(10 + i, `f${i}`, 1000 - i))
+    backend.kids.set(1, many)
+    const ex = setup()
+    await ex.ready
+    expect(ex.rows.value).toHaveLength(PAGE_SIZE)
+    expect(ex.hasMore.value).toBe(true)
+
+    await ex.loadMore()
+    expect(ex.rows.value).toHaveLength(PAGE_SIZE + 5)
+    expect(ex.rows.value.at(-1)?.name).toBe(`f${PAGE_SIZE + 4}`)
+    expect(ex.hasMore.value).toBe(false)
+  })
+
+  it('drops a page that arrives after navigating away', async () => {
+    const many = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => file(10 + i, `f${i}`, 1000 - i))
+    backend.kids.set(1, [dir(2, 'src', 5000), ...many])
+    const ex = setup()
+    await ex.ready
+
+    backend.hold(1)
+    const more = ex.loadMore()
+    await ex.open(ex.rows.value[0])
+    backend.release(1)
+    await more
+
+    expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT, 'src'])
+    expect(rowNames(ex)).toEqual(['main.go'])
+  })
+
+  it('goes up one level', async () => {
+    const ex = setup()
+    await ex.ready
+    await ex.up() // already at the top: nothing happens
+    expect(ex.trail.value).toHaveLength(1)
+
+    await ex.open(dir(2, 'C', 200))
+    await ex.up()
+    expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT])
   })
 })
 

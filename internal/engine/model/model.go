@@ -70,8 +70,30 @@ type Node struct {
 	Size     int64  `json:"size"`
 	DiskSize int64  `json:"diskSize"`
 	Flags    Flags  `json:"flags"`
-	Files    int64  `json:"files"` // files in the subtree (1 for a file)
+	Files    int64  `json:"files"`    // files in the subtree (1 for a file)
+	Modified int64  `json:"modified"` // unix seconds; 0 if unknown
 	Err      string `json:"err,omitempty"`
+}
+
+// Orders of a children listing.
+const (
+	SortSize     = "size" // on disk
+	SortName     = "name"
+	SortModified = "modified"
+)
+
+// ListQuery asks for one page of a directory's children.
+type ListQuery struct {
+	Sort   string `json:"sort"` // one of the Sort constants
+	Desc   bool   `json:"desc"`
+	Offset int    `json:"offset"`
+	Limit  int    `json:"limit"`
+}
+
+// Page is one page of a listing and the size of the whole listing.
+type Page struct {
+	Items []Node `json:"items"`
+	Total int64  `json:"total"`
 }
 
 // Progress counts what a scan has seen so far.

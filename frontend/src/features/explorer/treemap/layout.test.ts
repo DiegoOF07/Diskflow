@@ -11,6 +11,7 @@ const n = (id: number, size: number, files = 1, diskSize = size): Node => ({
   diskSize,
   flags: 0,
   files,
+  modified: 0,
 })
 const parent = (diskSize: number, size = diskSize) => ({ size, diskSize })
 const ids = (nodes: Node[]) => nodes.map((x) => x.id)
