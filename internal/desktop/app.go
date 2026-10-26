@@ -26,10 +26,10 @@ var errNotReady = errors.New("desktop: the index database is not available")
 // App is bound to the frontend: every exported method becomes a TS function.
 // It only translates between Wails and the engine; the logic lives in the engine.
 type App struct {
-	ctx     context.Context
-	eng     *engine.Engine
-	initErr error                       // why eng is nil, if it is
-	emit    func(name string, data any) // the Wails event bus; replaced in tests
+	eng          *engine.Engine
+	initErr      error                       // why eng is nil, if it is
+	emit         func(name string, data any) // the Wails event bus; replaced in tests
+	chooseFolder func() (string, error)      // the native folder dialog; replaced in tests
 }
 
 func NewApp() *App {
@@ -37,8 +37,10 @@ func NewApp() *App {
 }
 
 func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
 	a.emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
+	a.chooseFolder = func() (string, error) {
+		return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: "Carpeta a analizar"})
+	}
 	a.eng, a.initErr = openEngine()
 }
 
@@ -66,9 +68,56 @@ func (a *App) engine() (*engine.Engine, error) {
 	return a.eng, nil
 }
 
-// PickFolder opens the native folder dialog. It returns "" if the user cancels.
-func (a *App) PickFolder() (string, error) {
-	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Carpeta a analizar"})
+// PickFolder opens the native folder dialog and adds the chosen folder to the
+// catalog. It returns nil if the user cancels.
+func (a *App) PickFolder() (*model.RootInfo, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return nil, err
+	}
+	path, err := a.chooseFolder()
+	if err != nil || path == "" {
+		return nil, err
+	}
+	r, err := eng.AddRoot(path, "")
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// ListRoots returns the catalog with each folder's latest scans.
+func (a *App) ListRoots() ([]model.RootInfo, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return nil, err
+	}
+	return eng.ListRoots()
+}
+
+func (a *App) GetRoot(id int64) (model.RootInfo, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return model.RootInfo{}, err
+	}
+	return eng.GetRoot(id)
+}
+
+func (a *App) RenameRoot(id int64, name string) error {
+	eng, err := a.engine()
+	if err != nil {
+		return err
+	}
+	return eng.RenameRoot(id, name)
+}
+
+// RemoveRoot takes a folder out of the catalog. Its files are never touched.
+func (a *App) RemoveRoot(id int64) error {
+	eng, err := a.engine()
+	if err != nil {
+		return err
+	}
+	return eng.RemoveRoot(id)
 }
 
 // StartScan scans root in the background. Progress and the result arrive as

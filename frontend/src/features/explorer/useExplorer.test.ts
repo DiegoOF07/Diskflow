@@ -23,22 +23,21 @@ let scope: ReturnType<typeof effectScope>
 // useExplorer registers cleanups with onScopeDispose, so it runs inside an effect scope.
 function setup() {
   scope = effectScope()
-  return scope.run(() => useExplorer(backend))!
+  return scope.run(() => useExplorer(backend, ROOT))!
 }
 
 beforeEach(() => {
   backend = new FakeBackend()
-  backend.picked = ROOT
   backend.roots.set(ROOT, dir(1, ROOT, 300))
   backend.kids.set(1, [dir(2, 'src', 200), file(3, 'a.txt', 100)])
   backend.kids.set(2, [file(4, 'main.go', 200)])
 })
 
-describe('pickFolder', () => {
-  it('shows the previous index of the folder', async () => {
+describe('loading', () => {
+  it('shows the current index of its folder', async () => {
     const ex = setup()
-    await ex.pickFolder()
-    expect(ex.root.value).toBe(ROOT)
+    await ex.ready
+    expect(ex.root).toBe(ROOT)
     expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT])
     expect(ex.children.value.map((n) => n.name)).toEqual(['src', 'a.txt'])
   })
@@ -46,19 +45,9 @@ describe('pickFolder', () => {
   it('accepts a folder that was never scanned', async () => {
     backend.roots.clear()
     const ex = setup()
-    await ex.pickFolder()
-    expect(ex.root.value).toBe(ROOT)
+    await ex.ready
     expect(ex.trail.value).toEqual([])
     expect(ex.error.value).toBe('')
-  })
-
-  it('keeps everything when the dialog is closed', async () => {
-    const ex = setup()
-    await ex.pickFolder()
-    backend.picked = null
-    await ex.pickFolder()
-    expect(ex.root.value).toBe(ROOT)
-    expect(ex.children.value).toHaveLength(2)
   })
 })
 
@@ -66,7 +55,7 @@ describe('scan', () => {
   it('tracks progress and reloads the index when it completes', async () => {
     backend.roots.clear()
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     await ex.scan()
     expect(backend.started).toEqual([ROOT])
     expect(ex.scanning.value).toBe(true)
@@ -84,7 +73,7 @@ describe('scan', () => {
 
   it('keeps the current view when the scan is cancelled', async () => {
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     await ex.open(ex.children.value[0])
     await ex.scan()
     await ex.cancel()
@@ -99,7 +88,7 @@ describe('scan', () => {
   it('shows the error when the scan cannot start', async () => {
     backend.failStart = 'engine: a scan is already running'
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     await ex.scan()
     expect(ex.scanning.value).toBe(false)
     expect(ex.error.value).toBe('engine: a scan is already running')
@@ -109,7 +98,7 @@ describe('scan', () => {
 describe('navigation', () => {
   it('opens directories and goes back through the breadcrumbs', async () => {
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     await ex.open(ex.children.value[0])
     expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT, 'src'])
     expect(ex.children.value.map((n) => n.name)).toEqual(['main.go'])
@@ -121,7 +110,7 @@ describe('navigation', () => {
 
   it('does not open files', async () => {
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     await ex.open(ex.children.value[1])
     expect(ex.trail.value).toHaveLength(1)
   })
@@ -130,7 +119,7 @@ describe('navigation', () => {
     backend.kids.set(1, [dir(2, 'slow'), dir(5, 'fast')])
     backend.kids.set(5, [file(6, 'x')])
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     const [slow, fast] = ex.children.value
 
     backend.hold(2)
@@ -145,7 +134,7 @@ describe('navigation', () => {
 
   it('shows load errors and keeps the current view', async () => {
     const ex = setup()
-    await ex.pickFolder()
+    await ex.ready
     backend.failChildren = 'store: children: disk I/O error'
     await ex.open(ex.children.value[0])
     expect(ex.error.value).toBe('store: children: disk I/O error')

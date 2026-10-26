@@ -22,3 +22,14 @@ export function formatPercent(part: number, total: number): string {
 export function formatCount(n: number): string {
   return integer.format(n)
 }
+
+const relative = new Intl.RelativeTimeFormat('es', { numeric: 'auto' })
+
+/** Describes how long ago a unix time was: "hace 3 horas", "ayer". */
+export function formatAgo(unixSeconds: number, nowSeconds = Date.now() / 1000): string {
+  const s = Math.max(nowSeconds - unixSeconds, 0)
+  if (s < 60) return 'hace un momento'
+  if (s < 3600) return relative.format(-Math.floor(s / 60), 'minute')
+  if (s < 86400) return relative.format(-Math.floor(s / 3600), 'hour')
+  return relative.format(-Math.floor(s / 86400), 'day')
+}

@@ -5,13 +5,12 @@ import type { Backend, Node, Progress, Summary } from '../../backend/types'
 export const PAGE_SIZE = 200
 
 /**
- * State and actions of the explorer: pick a folder, scan it and browse the
+ * State and actions of the explorer of one folder: scan it and browse the
  * result. It holds no UI, so it can be tested without rendering components.
  * Call it inside a component's setup (or an effect scope): it unsubscribes
  * from scan events when that scope ends.
  */
-export function useExplorer(backend: Backend) {
-  const root = ref<string | null>(null)
+export function useExplorer(backend: Backend, root: string) {
   const trail = ref<Node[]>([]) // breadcrumbs; the last one is the directory shown
   const children = ref<Node[]>([])
   const progress = ref<Progress | null>(null)
@@ -49,41 +48,28 @@ export function useExplorer(backend: Backend) {
   async function show(newTrail: Node[]) {
     const id = ++seq
     const dir = newTrail[newTrail.length - 1]
-    const kids = await backend.children(root.value!, dir.id, PAGE_SIZE)
+    const kids = await backend.children(root, dir.id, PAGE_SIZE)
     if (id !== seq) return
     trail.value = newTrail
     children.value = kids
   }
 
   async function loadRoot() {
-    const r = await backend.root(root.value!)
+    const r = await backend.root(root)
     if (r) return show([r])
     seq++ // drops any navigation still in flight
     trail.value = []
     children.value = []
   }
 
-  const pickFolder = () =>
-    attempt(async () => {
-      if (scanning.value) return
-      const picked = await backend.pickFolder()
-      if (!picked) return
-      root.value = picked
-      progress.value = null
-      summary.value = null
-      trail.value = []
-      children.value = []
-      await loadRoot()
-    })
-
   const scan = () =>
     attempt(async () => {
-      if (!root.value || scanning.value) return
+      if (scanning.value) return
       progress.value = null
       summary.value = null
       scanning.value = true
       try {
-        await backend.startScan(root.value)
+        await backend.startScan(root)
       } catch (e) {
         scanning.value = false
         throw e
@@ -99,8 +85,12 @@ export function useExplorer(backend: Backend) {
 
   const goTo = (index: number) => attempt(() => show(trail.value.slice(0, index + 1)))
 
+  // Settles once the current index is shown, or the error is.
+  const ready = attempt(loadRoot)
+
   return {
-    root: readonly(root),
+    root,
+    ready,
     trail: readonly(trail),
     children: readonly(children),
     progress: readonly(progress),
@@ -109,7 +99,6 @@ export function useExplorer(backend: Backend) {
     error: readonly(error),
     current,
     truncated,
-    pickFolder,
     scan,
     cancel,
     open,

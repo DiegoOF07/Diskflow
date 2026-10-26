@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -85,8 +87,8 @@ func TestOpenEnablesWALAndMigratesOnce(t *testing.T) {
 	defer s2.Close()
 	var version int
 	s2.db.QueryRow("PRAGMA user_version").Scan(&version)
-	if version != 2 {
-		t.Fatalf("user_version = %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("user_version = %d, want 3", version)
 	}
 }
 
@@ -101,23 +103,36 @@ func TestOpenUsesNormalSynchronous(t *testing.T) {
 	}
 }
 
-func TestMigrationFillsDiskSizeOfOlderScans(t *testing.T) {
-	// A database as version 1 left it: one completed scan, no disk_size column.
+// openAtVersion creates a database as migration version left it, runs the
+// given statements on it, and returns its path.
+func openAtVersion(t *testing.T, version int, stmts ...string) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "old.db")
 	db, err := sql.Open("sqlite", "file:"+path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v1, _ := migrations.ReadFile("migrations/001_init.sql")
-	for _, q := range []string{string(v1), "PRAGMA user_version = 1",
-		"INSERT INTO scan_runs (id, root, status, started_at, bytes) VALUES (1, '/r', 'completed', 0, 400)",
-		"INSERT INTO entries (scan_id, id, parent_id, name, kind, size, files, mtime) VALUES (1, 1, 0, '/r', 1, 400, 1, 0)",
-	} {
+	defer db.Close()
+	names, _ := fs.Glob(migrations, "migrations/*.sql") // sorted, like migrate
+	var all []string
+	for _, name := range names[:version] {
+		body, _ := migrations.ReadFile(name)
+		all = append(all, string(body))
+	}
+	all = append(all, fmt.Sprintf("PRAGMA user_version = %d", version))
+	for _, q := range append(all, stmts...) {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatalf("%.40s: %v", q, err)
 		}
 	}
-	db.Close()
+	return path
+}
+
+func TestMigrationFillsDiskSizeOfOlderScans(t *testing.T) {
+	path := openAtVersion(t, 1,
+		"INSERT INTO scan_runs (id, root, status, started_at, bytes) VALUES (1, '/r', 'completed', 0, 400)",
+		"INSERT INTO entries (scan_id, id, parent_id, name, kind, size, files, mtime) VALUES (1, 1, 0, '/r', 1, 400, 1, 0)",
+	)
 
 	s, err := Open(path)
 	if err != nil {

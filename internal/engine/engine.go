@@ -44,10 +44,11 @@ type Engine struct {
 	opts  Options
 	dbDir string // excluded from every scan, compared with foldCase applied
 
-	mu     sync.Mutex
-	cancel context.CancelFunc // non-nil while a scan runs
-	done   chan struct{}      // closed when the current scan has finished
-	closed bool
+	mu      sync.Mutex
+	cancel  context.CancelFunc // non-nil while a scan runs
+	running string             // root key of the running scan
+	done    chan struct{}      // closed when the current scan has finished
+	closed  bool
 }
 
 // New opens the engine with its database at dbPath, creating the directory if needed.
@@ -109,6 +110,7 @@ func (e *Engine) StartScan(root string, cb Callbacks) (int64, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
+	e.running = key
 	e.done = make(chan struct{})
 	go e.run(ctx, id, root, withDefaults(cb))
 	return id, nil

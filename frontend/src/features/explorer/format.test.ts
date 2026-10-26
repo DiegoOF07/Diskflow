@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatCount, formatPercent } from './format'
+import { formatAgo, formatBytes, formatCount, formatPercent } from './format'
 
 describe('formatBytes', () => {
   it.each([
@@ -26,5 +26,18 @@ describe('formatPercent', () => {
 describe('formatCount', () => {
   it('groups thousands', () => {
     expect(formatCount(12345)).toBe('12.345')
+  })
+})
+
+describe('formatAgo', () => {
+  const now = 1_800_000_000 // unix seconds
+  it.each([
+    [now - 20, 'hace un momento'],
+    [now - 5 * 60, 'hace 5 minutos'],
+    [now - 3 * 3600, 'hace 3 horas'],
+    [now - 26 * 3600, 'ayer'],
+    [now - 10 * 86400, 'hace 10 días'],
+  ])('%d -> %s', (then, want) => {
+    expect(formatAgo(then, now)).toBe(want)
   })
 })
