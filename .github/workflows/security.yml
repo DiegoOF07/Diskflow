@@ -27,6 +27,13 @@ jobs:
       # Fails only when our code reaches a vulnerable symbol, including the standard library.
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./internal/... ./cmd/...
+      # wails dev builds with the dev tag, which links its dev server (Echo, x/net).
+      # On Linux that tag also pulls Wails' GTK code (cgo), so analyse the Windows build we ship.
+      # GOOS applies only to the analysis: govulncheck itself must stay a Linux binary.
+      - name: govulncheck (dev build)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          GOOS=windows "$(go env GOPATH)/bin/govulncheck" -tags dev ./internal/... ./cmd/...
 
   pnpm-audit:
     name: pnpm audit
