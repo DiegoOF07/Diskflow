@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
@@ -545,6 +546,26 @@ func TestTrailGoesFromTheRootDown(t *testing.T) {
 	}
 	if _, err := s.Trail(ctx, id, 99); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Trail of unknown entry: err = %v, want ErrNotFound", err)
+	}
+}
+
+// Trail runs once per search hit, so it must only look up entries by key.
+func TestTrailNeverReadsTheWholeScan(t *testing.T) {
+	s, _ := openTemp(t)
+	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+trailQuery, 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(detail, "entries") && !strings.Contains(detail, "AND id=?") {
+			t.Errorf("plan step %q reads entries without its key", detail)
+		}
 	}
 }
 

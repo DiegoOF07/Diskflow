@@ -66,6 +66,32 @@ describe('search', () => {
     expect(backend.searches).toEqual(['rep'])
   })
 
+  it('cancels the running search when the box is cleared', async () => {
+    const s = setup()
+    backend.hold('rep')
+    await type(s, 'rep')
+    await type(s, '')
+    expect(backend.searchesCancelled).toBe(1)
+    expect(s.searching.value).toBe(false)
+    backend.release('rep')
+  })
+
+  it('cancels the running search when it is disposed', async () => {
+    const s = setup()
+    backend.hold('rep')
+    await type(s, 'rep')
+    scope.stop()
+    expect(backend.searchesCancelled).toBe(1)
+  })
+
+  it('does not cancel when no search is running', async () => {
+    const s = setup()
+    await type(s, 'rep')
+    s.clear()
+    await type(s, '')
+    expect(backend.searchesCancelled).toBe(0)
+  })
+
   it('trims spaces and reports when there are more hits than shown', async () => {
     backend.kids.set(
       5,

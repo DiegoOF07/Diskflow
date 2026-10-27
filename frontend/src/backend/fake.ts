@@ -17,6 +17,7 @@ export class FakeBackend implements Backend {
   searches: string[] = []
   started: string[] = []
   cancelled = 0
+  searchesCancelled = 0
 
   private progressCbs = new Set<(p: Progress) => void>()
   private savingCbs = new Set<() => void>()
@@ -97,6 +98,9 @@ export class FakeBackend implements Backend {
     }
     hits.sort((a, b) => b.diskSize - a.diskSize || a.id - b.id)
     return { hits: hits.slice(0, limit), more: hits.length > limit }
+  }
+  async cancelSearch() {
+    this.searchesCancelled++
   }
   async trail(root: string, id: number) {
     const top = this.roots.get(root)

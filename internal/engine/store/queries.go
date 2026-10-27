@@ -129,16 +129,7 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // Trail returns the entries from the root down to id.
 func (s *Store) Trail(ctx context.Context, scanID, id int64) ([]model.Node, error) {
-	nodes, err := s.queryNodes(ctx, "trail", `
-		WITH RECURSIVE up(id, depth) AS (
-			SELECT id, 0 FROM entries WHERE scan_id = ?1 AND id = ?2
-			UNION ALL
-			SELECT e.parent_id, up.depth + 1
-			FROM entries e JOIN up ON e.scan_id = ?1 AND e.id = up.id
-			WHERE e.parent_id <> 0
-		)
-		SELECT `+nodeColumns+` FROM up JOIN entries USING (id)
-		WHERE entries.scan_id = ?1 ORDER BY depth DESC`, scanID, id)
+	nodes, err := s.queryNodes(ctx, "trail", trailQuery, scanID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +138,17 @@ func (s *Store) Trail(ctx context.Context, scanID, id int64) ([]model.Node, erro
 	}
 	return nodes, nil
 }
+
+// trailQuery carries the columns through the recursion. Joining entries again
+// afterwards made SQLite read the whole scan on every call.
+const trailQuery = `
+	WITH RECURSIVE up(` + nodeColumns + `, parent_id, depth) AS (
+		SELECT ` + nodeColumns + `, parent_id, 0 FROM entries WHERE scan_id = ?1 AND id = ?2
+		UNION ALL
+		SELECT e.id, e.name, e.kind, e.size, e.disk_size, e.flags, e.files, e.mtime, e.err, e.parent_id, up.depth + 1
+		FROM entries e JOIN up ON e.scan_id = ?1 AND e.id = up.parent_id
+	)
+	SELECT ` + nodeColumns + ` FROM up ORDER BY depth DESC`
 
 // Path returns the names from the root down to entry id. Joining them is left
 // to the caller, which knows the OS path rules.

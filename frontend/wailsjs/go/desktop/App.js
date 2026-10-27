@@ -6,6 +6,10 @@ export function CancelScan() {
   return window['go']['desktop']['App']['CancelScan']();
 }
 
+export function CancelSearch() {
+  return window['go']['desktop']['App']['CancelSearch']();
+}
+
 export function Children(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['Children'](arg1, arg2, arg3);
 }

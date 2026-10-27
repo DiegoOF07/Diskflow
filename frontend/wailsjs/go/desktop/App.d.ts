@@ -4,6 +4,8 @@ import {model} from '../models';
 
 export function CancelScan():Promise<void>;
 
+export function CancelSearch():Promise<void>;
+
 export function Children(arg1:string,arg2:number,arg3:number):Promise<Array<model.Node>>;
 
 export function GetRoot(arg1:number):Promise<model.RootInfo>;

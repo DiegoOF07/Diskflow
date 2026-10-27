@@ -178,6 +178,13 @@ func (a *App) Search(root, q string, limit int) (model.SearchResult, error) {
 	return eng.Search(root, q, limit)
 }
 
+// CancelSearch stops the running search; the UI calls it when the search box is cleared.
+func (a *App) CancelSearch() {
+	if a.eng != nil {
+		a.eng.CancelSearch()
+	}
+}
+
 // Trail returns the entries from the root down to id, to show where a search hit is.
 func (a *App) Trail(root string, id int64) ([]model.Node, error) {
 	eng, err := a.engine()

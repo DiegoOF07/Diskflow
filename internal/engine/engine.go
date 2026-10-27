@@ -288,6 +288,15 @@ func (e *Engine) searchContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
+// CancelSearch stops the running search, if any, so it frees the database.
+func (e *Engine) CancelSearch() {
+	e.searchMu.Lock()
+	defer e.searchMu.Unlock()
+	if e.cancelSearch != nil {
+		e.cancelSearch()
+	}
+}
+
 // Trail returns the entries from the root of the active index down to id.
 func (e *Engine) Trail(root string, id int64) ([]model.Node, error) {
 	scanID, err := e.activeScan(root)

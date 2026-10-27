@@ -20,12 +20,19 @@ export function useSearch(backend: Backend, root: string) {
   // Every keystroke takes a number; only the response of the latest one is applied.
   let seq = 0
   let timer: ReturnType<typeof setTimeout> | undefined
+  let inFlight = 0 // requests sent and not answered yet
+
+  // A search left running would hold the database and delay other screens.
+  function stop() {
+    if (inFlight) void backend.cancelSearch()
+  }
 
   function schedule(delay: number) {
     clearTimeout(timer)
     const id = ++seq
     const text = query.value.trim()
     if (!text) {
+      stop()
       hits.value = []
       more.value = false
       searching.value = false
@@ -37,6 +44,7 @@ export function useSearch(backend: Backend, root: string) {
   }
 
   async function run(id: number, text: string) {
+    inFlight++
     try {
       const res = await backend.search(root, text, SEARCH_LIMIT)
       if (id !== seq) return
@@ -49,6 +57,7 @@ export function useSearch(backend: Backend, root: string) {
       more.value = false
       error.value = e instanceof Error ? e.message : String(e)
     } finally {
+      inFlight--
       if (id === seq) searching.value = false
     }
   }
@@ -61,6 +70,7 @@ export function useSearch(backend: Backend, root: string) {
   })
   onScopeDispose(() => {
     clearTimeout(timer)
+    stop()
     off()
   })
 

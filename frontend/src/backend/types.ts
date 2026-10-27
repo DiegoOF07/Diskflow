@@ -103,6 +103,8 @@ export interface Backend {
   listChildren(root: string, parentId: number, q: ListQuery): Promise<Page>
   /** Entries whose name contains q, ignoring case. A newer search makes this one reject. */
   search(root: string, q: string, limit: number): Promise<SearchResult>
+  /** Stops the running search, if any, so it stops holding the database. */
+  cancelSearch(): Promise<void>
   /** The entries from the root down to id. */
   trail(root: string, id: number): Promise<Node[]>
   onProgress(cb: (p: Progress) => void): Off

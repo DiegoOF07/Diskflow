@@ -1,5 +1,6 @@
 import {
   CancelScan,
+  CancelSearch,
   Children,
   GetRoot,
   ListChildren,
@@ -34,6 +35,7 @@ export const wailsBackend: Backend = {
   children: async (root, parentId, limit) => (await Children(root, parentId, limit)) as Node[],
   listChildren: async (root, parentId, q) => (await ListChildren(root, parentId, q)) as Page,
   search: async (root, q, limit) => (await Search(root, q, limit)) as SearchResult,
+  cancelSearch: () => CancelSearch(),
   trail: async (root, id) => (await Trail(root, id)) as Node[],
   // EventsOn returns its own unsubscribe function; EventsOff would remove every listener of the event.
   onProgress: (cb) => EventsOn(EVENT_PROGRESS, (p: Progress) => cb(p)),

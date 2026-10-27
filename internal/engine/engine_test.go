@@ -457,4 +457,8 @@ func TestNewSearchCancelsThePreviousOne(t *testing.T) {
 	if second.Err() != nil {
 		t.Fatal("the new search was cancelled")
 	}
+	e.CancelSearch()
+	if second.Err() == nil {
+		t.Fatal("CancelSearch left the search running")
+	}
 }
