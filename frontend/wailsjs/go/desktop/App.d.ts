@@ -8,6 +8,8 @@ export function CancelSearch():Promise<void>;
 
 export function Children(arg1:string,arg2:number,arg3:number):Promise<Array<model.Node>>;
 
+export function CopyPath(arg1:string,arg2:number):Promise<void>;
+
 export function GetRoot(arg1:number):Promise<model.RootInfo>;
 
 export function ListChildren(arg1:string,arg2:number,arg3:model.ListQuery):Promise<model.Page>;
@@ -23,6 +25,8 @@ export function RenameRoot(arg1:number,arg2:string):Promise<void>;
 export function Root(arg1:string):Promise<model.Node>;
 
 export function Search(arg1:string,arg2:string,arg3:number):Promise<model.SearchResult>;
+
+export function ShowInExplorer(arg1:string,arg2:number):Promise<void>;
 
 export function StartScan(arg1:string):Promise<void>;
 

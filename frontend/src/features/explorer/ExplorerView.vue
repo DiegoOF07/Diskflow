@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
-import type { Hit, SortKey } from '../../backend/types'
+import type { Hit, Node, SortKey } from '../../backend/types'
 import { formatBytes, formatCount, formatDate, formatPercent } from './format'
 import { flagLabels, isEstimated, showLogical, sizeNote } from './size'
 import TreemapChart from './treemap/TreemapChart.vue'
@@ -23,6 +23,7 @@ const {
   total,
   sort,
   found,
+  copied,
   progress,
   summary,
   scanning,
@@ -48,6 +49,27 @@ const ariaSort = (key: SortKey) =>
   sort.value.key !== key ? 'none' : sort.value.desc ? 'descending' : 'ascending'
 const arrow = (key: SortKey) => (sort.value.key !== key ? '' : sort.value.desc ? ' ↓' : ' ↑')
 
+// Context menu of a row, opened with the right button, the Menu key or Shift+F10.
+const MENU_WIDTH = 220
+const menu = ref<{ node: Node; x: number; y: number } | null>(null)
+const menuEl = useTemplateRef<HTMLElement>('menuEl')
+async function openMenu(node: Node, x: number, y: number) {
+  menu.value = { node, x: Math.min(x, window.innerWidth - MENU_WIDTH), y }
+  await nextTick()
+  menuEl.value?.querySelector('button')?.focus()
+}
+function menuAt(e: MouseEvent, node: Node) {
+  void openMenu(node, e.clientX, e.clientY)
+}
+function closeMenu() {
+  menu.value = null
+}
+function act(fn: (n: Node) => unknown) {
+  const node = menu.value?.node
+  closeMenu()
+  if (node) void fn(node)
+}
+
 function pick(hit: Hit) {
   search.clear()
   void ex.reveal(hit)
@@ -63,15 +85,22 @@ watch(found, async (id) => {
 
 // Keyboard: each row is one tab stop; arrows move between rows, Enter acts on
 // the row (opens a folder, shows a search hit) and Backspace goes up a level.
-function onRowKey(e: KeyboardEvent, enter: () => unknown) {
+function onRowKey(e: KeyboardEvent, enter: () => unknown, node?: Node) {
   const row = e.currentTarget as HTMLElement
-  if (e.key === 'Enter') void enter()
+  if (node && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+    const r = row.getBoundingClientRect()
+    void openMenu(node, r.left + 24, r.bottom)
+  } else if (e.key === 'Enter') void enter()
   else if (e.key === 'ArrowDown') (row.nextElementSibling as HTMLElement | null)?.focus()
   else if (e.key === 'ArrowUp') (row.previousElementSibling as HTMLElement | null)?.focus()
   else return
   e.preventDefault()
 }
 function onKey(e: KeyboardEvent) {
+  if (menu.value) {
+    if (e.key === 'Escape') closeMenu()
+    return
+  }
   if (e.ctrlKey && e.key === 'f' && searchBox.value) {
     e.preventDefault()
     searchBox.value.focus()
@@ -83,8 +112,16 @@ function onKey(e: KeyboardEvent) {
   e.preventDefault()
   void ex.up()
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('click', closeMenu)
+  window.addEventListener('blur', closeMenu)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('click', closeMenu)
+  window.removeEventListener('blur', closeMenu)
+})
 </script>
 
 <template>
@@ -238,7 +275,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             :class="{ hovered: hovered === n.id, found: found === n.id }"
             @mouseenter="hovered = n.id"
             @mouseleave="hovered = null"
-            @keydown="onRowKey($event, () => ex.open(n))"
+            @keydown="onRowKey($event, () => ex.open(n), n)"
+            @contextmenu.prevent="menuAt($event, n)"
           >
             <td class="name">
               <button v-if="n.kind === 'dir'" type="button" class="link" tabindex="-1" @click="ex.open(n)">
@@ -248,6 +286,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <span v-if="n.err" class="badge" :title="n.err">sin acceso</span>
               <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
                 {{ label }}
+              </span>
+              <span v-if="copied === n.id" class="copied" role="status">Ruta copiada</span>
+              <span class="actions">
+                <button
+                  type="button"
+                  tabindex="-1"
+                  title="Mostrar en el Explorador"
+                  aria-label="Mostrar en el Explorador"
+                  @click="ex.showInExplorer(n)"
+                >
+                  📂
+                </button>
+                <button
+                  type="button"
+                  tabindex="-1"
+                  title="Copiar ruta"
+                  aria-label="Copiar ruta"
+                  @click="ex.copyPath(n)"
+                >
+                  📋
+                </button>
               </span>
             </td>
             <td class="num">{{ formatBytes(n.diskSize) }}</td>
@@ -267,6 +326,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <button v-if="hasMore" type="button" @click="ex.loadMore">Cargar más</button>
       </p>
     </template>
+    <div
+      v-if="menu"
+      ref="menuEl"
+      class="menu"
+      role="menu"
+      :aria-label="menu.node.name"
+      :style="{ left: `${menu.x}px`, top: `${menu.y}px`, width: `${MENU_WIDTH}px` }"
+      @click.stop
+    >
+      <button type="button" role="menuitem" @click="act(ex.showInExplorer)">Mostrar en el Explorador</button>
+      <button type="button" role="menuitem" @click="act(ex.copyPath)">Copiar ruta</button>
+    </div>
   </main>
 </template>
 
@@ -424,6 +495,52 @@ tbody tr:focus-visible {
 }
 .error-text {
   color: var(--danger);
+}
+.actions {
+  visibility: hidden;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+tr:hover .actions,
+tr:focus-within .actions {
+  visibility: visible;
+}
+.actions button {
+  background: none;
+  border: none;
+  padding: 0 3px;
+  cursor: pointer;
+}
+.copied {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.menu {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+.menu button {
+  text-align: left;
+  font: inherit;
+  color: var(--fg);
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.menu button:hover,
+.menu button:focus-visible {
+  background: var(--row-hover);
+  outline: none;
 }
 tr.found {
   background: var(--accent-soft);

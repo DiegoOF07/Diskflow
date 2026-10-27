@@ -1,8 +1,8 @@
 import { effectScope } from 'vue'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { dir, FakeBackend, file } from '../../backend/fake'
 import type { Summary } from '../../backend/types'
-import { PAGE_SIZE, useExplorer } from './useExplorer'
+import { COPIED_MS, PAGE_SIZE, useExplorer } from './useExplorer'
 
 const ROOT = 'C:\\work'
 const flush = () => new Promise((r) => setTimeout(r, 0))
@@ -255,6 +255,40 @@ describe('reveal', () => {
     await ex.reveal({ ...file(99, 'gone', 1), parentId: 98, dir: '' })
     expect(ex.error.value).toBe('store: not found')
     expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT])
+  })
+})
+
+describe('actions', () => {
+  it('shows an entry in Explorer by id', async () => {
+    const ex = setup()
+    await ex.ready
+    await ex.showInExplorer(file(3, 'a.txt', 100))
+    expect(backend.shown).toEqual([3])
+    expect(ex.error.value).toBe('')
+  })
+
+  it('confirms a copied path for a while', async () => {
+    vi.useFakeTimers()
+    try {
+      const ex = setup()
+      await ex.ready
+      await ex.copyPath(file(3, 'a.txt', 100))
+      expect(backend.copied).toEqual([3])
+      expect(ex.copied.value).toBe(3)
+      await vi.advanceTimersByTimeAsync(COPIED_MS)
+      expect(ex.copied.value).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows why an action failed', async () => {
+    backend.failAction = 'store: not found: C:\\work\\a.txt no longer exists'
+    const ex = setup()
+    await ex.ready
+    await ex.copyPath(file(3, 'a.txt', 100))
+    expect(ex.error.value).toContain('no longer exists')
+    expect(ex.copied.value).toBeNull()
   })
 })
 

@@ -3,7 +3,9 @@ package desktop
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 
@@ -175,5 +177,42 @@ func TestRenameAndRemoveRoot(t *testing.T) {
 	}
 	if _, err := a.GetRoot(r.ID); !errors.Is(err, engine.ErrRootNotFound) {
 		t.Fatalf("GetRoot after remove: err = %v, want ErrRootNotFound", err)
+	}
+}
+
+func TestActionsUseTheResolvedPath(t *testing.T) {
+	a, _ := newTestApp(t)
+	var shown, copied []string
+	a.showFile = func(p string) error { shown = append(shown, p); return nil }
+	a.copyText = func(s string) error { copied = append(copied, s); return nil }
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a b.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.StartScan(dir)
+	a.eng.Wait()
+	root, _ := a.Root(dir)
+	kids, _ := a.Children(dir, root.ID, 1)
+
+	if err := a.ShowInExplorer(dir, kids[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.CopyPath(dir, kids[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(shown, []string{file}) || !slices.Equal(copied, []string{file}) {
+		t.Fatalf("shown %q, copied %q; want %q once each", shown, copied, file)
+	}
+
+	os.Remove(file)
+	if err := a.ShowInExplorer(dir, kids[0].ID); !errors.Is(err, engine.ErrNotFound) {
+		t.Fatalf("deleted file: err = %v, want ErrNotFound", err)
+	}
+	if err := a.CopyPath(dir, 999); !errors.Is(err, engine.ErrNotFound) {
+		t.Fatalf("unknown id: err = %v, want ErrNotFound", err)
+	}
+	if len(shown) != 1 || len(copied) != 1 {
+		t.Fatal("an action ran on a path that did not resolve")
 	}
 }
