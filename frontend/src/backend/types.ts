@@ -105,6 +105,10 @@ export interface Backend {
   search(root: string, q: string, limit: number): Promise<SearchResult>
   /** Stops the running search, if any, so it stops holding the database. */
   cancelSearch(): Promise<void>
+  /** Opens Explorer with the entry selected. Go rebuilds and checks the path; the UI only sends the id. */
+  showInExplorer(root: string, id: number): Promise<void>
+  /** Puts the entry's absolute path in the clipboard. */
+  copyPath(root: string, id: number): Promise<void>
   /** The entries from the root down to id. */
   trail(root: string, id: number): Promise<Node[]>
   onProgress(cb: (p: Progress) => void): Off

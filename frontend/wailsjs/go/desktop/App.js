@@ -14,6 +14,10 @@ export function Children(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['Children'](arg1, arg2, arg3);
 }
 
+export function CopyPath(arg1, arg2) {
+  return window['go']['desktop']['App']['CopyPath'](arg1, arg2);
+}
+
 export function GetRoot(arg1) {
   return window['go']['desktop']['App']['GetRoot'](arg1);
 }
@@ -44,6 +48,10 @@ export function Root(arg1) {
 
 export function Search(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['Search'](arg1, arg2, arg3);
+}
+
+export function ShowInExplorer(arg1, arg2) {
+  return window['go']['desktop']['App']['ShowInExplorer'](arg1, arg2);
 }
 
 export function StartScan(arg1) {

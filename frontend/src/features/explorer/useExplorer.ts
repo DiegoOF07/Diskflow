@@ -4,6 +4,9 @@ import type { Backend, Hit, Node, Progress, SortKey, Summary } from '../../backe
 /** Children loaded at a time: the UI never loads a whole directory at once. */
 export const PAGE_SIZE = 200
 
+/** How long, in ms, the "path copied" confirmation stays. */
+export const COPIED_MS = 2000
+
 // Pages loaded at most to bring a revealed entry into the table.
 const REVEAL_PAGES = 5
 
@@ -23,6 +26,7 @@ export function useExplorer(backend: Backend, root: string) {
   const total = ref(0) // children of the directory shown
   const sort = ref({ key: 'size' as SortKey, desc: true })
   const found = ref<number | null>(null) // entry revealed from a search
+  const copied = ref<number | null>(null) // entry whose path was just copied
   const progress = ref<Progress | null>(null)
   const summary = ref<Summary | null>(null)
   const scanning = ref(false)
@@ -43,7 +47,11 @@ export function useExplorer(backend: Backend, root: string) {
       if (s.status === 'completed') void attempt(loadRoot)
     }),
   ]
-  onScopeDispose(() => offs.forEach((off) => off()))
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+  onScopeDispose(() => {
+    offs.forEach((off) => off())
+    clearTimeout(copiedTimer)
+  })
 
   async function attempt(fn: () => Promise<unknown>) {
     error.value = ''
@@ -152,6 +160,16 @@ export function useExplorer(backend: Backend, root: string) {
       if (id === seq) found.value = hit.id
     })
 
+  const showInExplorer = (node: Node) => attempt(() => backend.showInExplorer(root, node.id))
+
+  const copyPath = (node: Node) =>
+    attempt(async () => {
+      await backend.copyPath(root, node.id)
+      copied.value = node.id
+      clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => (copied.value = null), COPIED_MS)
+    })
+
   // Settles once the current index is shown, or the error is.
   const ready = attempt(loadRoot)
 
@@ -164,6 +182,7 @@ export function useExplorer(backend: Backend, root: string) {
     total: readonly(total),
     sort: readonly(sort),
     found: readonly(found),
+    copied: readonly(copied),
     progress: readonly(progress),
     summary: readonly(summary),
     scanning: readonly(scanning),
@@ -179,5 +198,7 @@ export function useExplorer(backend: Backend, root: string) {
     sortBy,
     loadMore,
     reveal,
+    showInExplorer,
+    copyPath,
   }
 }

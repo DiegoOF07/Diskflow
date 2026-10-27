@@ -2,6 +2,7 @@ import {
   CancelScan,
   CancelSearch,
   Children,
+  CopyPath,
   GetRoot,
   ListChildren,
   ListRoots,
@@ -10,6 +11,7 @@ import {
   RenameRoot,
   Root,
   Search,
+  ShowInExplorer,
   StartScan,
   Trail,
 } from '../../wailsjs/go/desktop/App'
@@ -36,6 +38,8 @@ export const wailsBackend: Backend = {
   listChildren: async (root, parentId, q) => (await ListChildren(root, parentId, q)) as Page,
   search: async (root, q, limit) => (await Search(root, q, limit)) as SearchResult,
   cancelSearch: () => CancelSearch(),
+  showInExplorer: (root, id) => ShowInExplorer(root, id),
+  copyPath: (root, id) => CopyPath(root, id),
   trail: async (root, id) => (await Trail(root, id)) as Node[],
   // EventsOn returns its own unsubscribe function; EventsOff would remove every listener of the event.
   onProgress: (cb) => EventsOn(EVENT_PROGRESS, (p: Progress) => cb(p)),

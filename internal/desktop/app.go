@@ -31,6 +31,8 @@ type App struct {
 	initErr      error                       // why eng is nil, if it is
 	emit         func(name string, data any) // the Wails event bus; replaced in tests
 	chooseFolder func() (string, error)      // the native folder dialog; replaced in tests
+	showFile     func(path string) error     // selects path in Explorer; replaced in tests
+	copyText     func(text string) error     // the clipboard; replaced in tests
 }
 
 func NewApp() *App {
@@ -42,6 +44,8 @@ func (a *App) startup(ctx context.Context) {
 	a.chooseFolder = func() (string, error) {
 		return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: "Carpeta a analizar"})
 	}
+	a.showFile = showInFileManager
+	a.copyText = func(text string) error { return runtime.ClipboardSetText(ctx, text) }
 	a.eng, a.initErr = openEngine()
 }
 
@@ -176,6 +180,33 @@ func (a *App) Search(root, q string, limit int) (model.SearchResult, error) {
 		return model.SearchResult{}, err
 	}
 	return eng.Search(root, q, limit)
+}
+
+// ShowInExplorer opens Explorer with entry id selected. The UI only sends ids:
+// the path is rebuilt from the index and checked here, never taken from the UI.
+func (a *App) ShowInExplorer(root string, id int64) error {
+	path, err := a.resolve(root, id)
+	if err != nil {
+		return err
+	}
+	return a.showFile(path)
+}
+
+// CopyPath puts the absolute path of entry id in the clipboard.
+func (a *App) CopyPath(root string, id int64) error {
+	path, err := a.resolve(root, id)
+	if err != nil {
+		return err
+	}
+	return a.copyText(path)
+}
+
+func (a *App) resolve(root string, id int64) (string, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return "", err
+	}
+	return eng.ResolvePath(root, id)
 }
 
 // CancelSearch stops the running search; the UI calls it when the search box is cleared.

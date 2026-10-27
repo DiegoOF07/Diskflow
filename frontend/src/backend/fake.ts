@@ -18,6 +18,9 @@ export class FakeBackend implements Backend {
   started: string[] = []
   cancelled = 0
   searchesCancelled = 0
+  shown: number[] = [] // ids passed to showInExplorer
+  copied: number[] = [] // ids passed to copyPath
+  failAction: string | null = null
 
   private progressCbs = new Set<(p: Progress) => void>()
   private savingCbs = new Set<() => void>()
@@ -101,6 +104,14 @@ export class FakeBackend implements Backend {
   }
   async cancelSearch() {
     this.searchesCancelled++
+  }
+  async showInExplorer(_root: string, id: number) {
+    if (this.failAction) throw this.failAction
+    this.shown.push(id)
+  }
+  async copyPath(_root: string, id: number) {
+    if (this.failAction) throw this.failAction
+    this.copied.push(id)
   }
   async trail(root: string, id: number) {
     const top = this.roots.get(root)
