@@ -6,6 +6,10 @@ export function CancelScan() {
   return window['go']['desktop']['App']['CancelScan']();
 }
 
+export function CancelSearch() {
+  return window['go']['desktop']['App']['CancelSearch']();
+}
+
 export function Children(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['Children'](arg1, arg2, arg3);
 }
@@ -38,6 +42,14 @@ export function Root(arg1) {
   return window['go']['desktop']['App']['Root'](arg1);
 }
 
+export function Search(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['Search'](arg1, arg2, arg3);
+}
+
 export function StartScan(arg1) {
   return window['go']['desktop']['App']['StartScan'](arg1);
+}
+
+export function Trail(arg1, arg2) {
+  return window['go']['desktop']['App']['Trail'](arg1, arg2);
 }

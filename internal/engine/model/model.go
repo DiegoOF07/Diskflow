@@ -96,6 +96,19 @@ type Page struct {
 	Total int64  `json:"total"`
 }
 
+// Hit is one search result.
+type Hit struct {
+	Node
+	ParentID int64  `json:"parentId"`
+	Dir      string `json:"dir"` // absolute path of the folder that holds it
+}
+
+// SearchResult holds the biggest hits of a search; More says that others were left out.
+type SearchResult struct {
+	Hits []Hit `json:"hits"`
+	More bool  `json:"more"`
+}
+
 // Progress counts what a scan has seen so far.
 type Progress struct {
 	Files     int64 `json:"files"`

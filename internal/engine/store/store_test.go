@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
@@ -527,5 +528,156 @@ func TestPathWalksUpToTheRoot(t *testing.T) {
 	}
 	if _, err := s.Path(ctx, id, 99); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Path of unknown entry: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestTrailGoesFromTheRootDown(t *testing.T) {
+	s, _ := openTemp(t)
+	id := listScan(t, s)
+	got, err := s.Trail(ctx, id, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"/r", "b", "inside"}; !slices.Equal(names(got), want) {
+		t.Fatalf("Trail = %q, want %q", names(got), want)
+	}
+	if got[1].Kind != "dir" || got[1].DiskSize != 200 {
+		t.Fatalf("Trail[1] = %+v, want the full node of b", got[1])
+	}
+	if _, err := s.Trail(ctx, id, 99); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Trail of unknown entry: err = %v, want ErrNotFound", err)
+	}
+}
+
+// Trail runs once per search hit, so it must only look up entries by key.
+func TestTrailNeverReadsTheWholeScan(t *testing.T) {
+	s, _ := openTemp(t)
+	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+trailQuery, 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(detail, "entries") && !strings.Contains(detail, "AND id=?") {
+			t.Errorf("plan step %q reads entries without its key", detail)
+		}
+	}
+}
+
+// searchScan stores names that only match literally if wildcards are escaped.
+func searchScan(t *testing.T, s *Store, root string) int64 {
+	t.Helper()
+	id, _ := s.BeginScan(ctx, root)
+	err := s.InsertEntries(ctx, id, []model.Entry{
+		{ID: 1, Name: root + "/report", Kind: model.KindDir},
+		{ID: 2, ParentID: 1, Name: "Report.PDF", Kind: model.KindFile, DiskSize: 300},
+		{ID: 3, ParentID: 1, Name: "reports", Kind: model.KindDir, DiskSize: 500},
+		{ID: 4, ParentID: 3, Name: "old_report.txt", Kind: model.KindFile, DiskSize: 100},
+		{ID: 5, ParentID: 3, Name: "100%.txt", Kind: model.KindFile, DiskSize: 10},
+		{ID: 6, ParentID: 3, Name: "1000.txt", Kind: model.KindFile, DiskSize: 20},
+		{ID: 7, ParentID: 3, Name: `a\b`, Kind: model.KindFile, DiskSize: 30},
+		{ID: 8, ParentID: 3, Name: "oldXreport", Kind: model.KindFile, DiskSize: 40},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinishScan(ctx, id, model.StatusCompleted, model.Progress{}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func hitNames(res model.SearchResult) []string {
+	out := make([]string, len(res.Hits))
+	for i, h := range res.Hits {
+		out[i] = h.Name
+	}
+	return out
+}
+
+func TestSearchMatchesNamesIgnoringCase(t *testing.T) {
+	s, _ := openTemp(t)
+	id := searchScan(t, s, "/r")
+	res, err := s.Search(ctx, id, "REPORT", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Biggest first; the root's own name never matches.
+	if want := []string{"reports", "Report.PDF", "old_report.txt", "oldXreport"}; !slices.Equal(hitNames(res), want) {
+		t.Fatalf("hits = %q, want %q", hitNames(res), want)
+	}
+	if res.More {
+		t.Fatal("More = true, want false")
+	}
+	if res.Hits[2].ParentID != 3 || res.Hits[2].Kind != "file" || res.Hits[2].DiskSize != 100 {
+		t.Fatalf("hit = %+v, want old_report.txt inside reports", res.Hits[2])
+	}
+}
+
+func TestSearchTreatsWildcardsLiterally(t *testing.T) {
+	s, _ := openTemp(t)
+	id := searchScan(t, s, "/r")
+	for q, want := range map[string][]string{
+		"100%":    {"100%.txt"},
+		"old_rep": {"old_report.txt"},
+		`a\b`:     {`a\b`},
+	} {
+		res, err := s.Search(ctx, id, q, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(hitNames(res), want) {
+			t.Errorf("Search(%q) = %q, want %q", q, hitNames(res), want)
+		}
+	}
+}
+
+func TestSearchLimitsAndReportsMore(t *testing.T) {
+	s, _ := openTemp(t)
+	id := searchScan(t, s, "/r")
+	res, err := s.Search(ctx, id, "report", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(hitNames(res), []string{"reports", "Report.PDF"}) || !res.More {
+		t.Fatalf("hits = %q, more = %v; want the 2 biggest and more", hitNames(res), res.More)
+	}
+	res, err = s.Search(ctx, id, "report", 4)
+	if err != nil || res.More {
+		t.Fatalf("exactly at the limit: more = %v, err = %v; want false", res.More, err)
+	}
+}
+
+func TestSearchOnlyLooksInTheGivenScan(t *testing.T) {
+	s, _ := openTemp(t)
+	old := searchScan(t, s, "/r")
+	other := searchScan(t, s, "/other")
+	res, err := s.Search(ctx, old, "100%", 10)
+	if err != nil || len(res.Hits) != 1 {
+		t.Fatalf("hits = %q, %v; want only those of scan %d (not %d)", hitNames(res), err, old, other)
+	}
+}
+
+func TestSearchWithEmptyQuery(t *testing.T) {
+	s, _ := openTemp(t)
+	id := searchScan(t, s, "/r")
+	res, err := s.Search(ctx, id, "", 10)
+	if err != nil || res.Hits == nil || len(res.Hits) != 0 {
+		t.Fatalf("Search(\"\") = %#v, %v; want an empty, non-nil list", res.Hits, err)
+	}
+}
+
+func TestSearchStopsWhenCancelled(t *testing.T) {
+	s, _ := openTemp(t)
+	id := searchScan(t, s, "/r")
+	c, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.Search(c, id, "report", 10); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }

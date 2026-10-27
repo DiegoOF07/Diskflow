@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
-import type { Node, SortKey } from '../../backend/types'
+import type { Hit, SortKey } from '../../backend/types'
 import { formatBytes, formatCount, formatDate, formatPercent } from './format'
 import { flagLabels, isEstimated, showLogical, sizeNote } from './size'
 import TreemapChart from './treemap/TreemapChart.vue'
 import { useExplorer } from './useExplorer'
+import { SEARCH_LIMIT, useSearch } from './useSearch'
 
 const props = defineProps<{
   root: string // folder path; the explorer is recreated for another folder
@@ -13,9 +14,27 @@ const props = defineProps<{
   autoscan?: boolean // start a scan as soon as the current index is shown
 }>()
 
-const ex = useExplorer(useBackend(), props.root)
-const { trail, children, rows, total, sort, progress, summary, scanning, saving, error, current, hasMore } =
-  ex
+const backend = useBackend()
+const ex = useExplorer(backend, props.root)
+const {
+  trail,
+  children,
+  rows,
+  total,
+  sort,
+  found,
+  progress,
+  summary,
+  scanning,
+  saving,
+  error,
+  current,
+  hasMore,
+} = ex
+const search = useSearch(backend, props.root)
+const { query, hits, more, searching } = search
+const searchBox = useTemplateRef<HTMLInputElement>('searchBox')
+const searchActive = computed(() => query.value.trim() !== '')
 if (props.autoscan) void ex.ready.then(ex.scan)
 
 const STATUS_TEXT = { completed: 'Completado', cancelled: 'Cancelado', failed: 'Falló' } as const
@@ -29,17 +48,35 @@ const ariaSort = (key: SortKey) =>
   sort.value.key !== key ? 'none' : sort.value.desc ? 'descending' : 'ascending'
 const arrow = (key: SortKey) => (sort.value.key !== key ? '' : sort.value.desc ? ' ↓' : ' ↑')
 
-// Keyboard: each row is one tab stop; arrows move between rows, Enter opens a
-// folder and Backspace goes up a level.
-function onRowKey(e: KeyboardEvent, n: Node) {
+function pick(hit: Hit) {
+  search.clear()
+  void ex.reveal(hit)
+}
+// Bring the revealed row into view once it is rendered.
+watch(found, async (id) => {
+  if (id === null) return
+  await nextTick()
+  const row = document.querySelector<HTMLElement>(`tr[data-id="${id}"]`)
+  row?.focus({ preventScroll: true })
+  row?.scrollIntoView({ block: 'center' })
+})
+
+// Keyboard: each row is one tab stop; arrows move between rows, Enter acts on
+// the row (opens a folder, shows a search hit) and Backspace goes up a level.
+function onRowKey(e: KeyboardEvent, enter: () => unknown) {
   const row = e.currentTarget as HTMLElement
-  if (e.key === 'Enter') void ex.open(n)
+  if (e.key === 'Enter') void enter()
   else if (e.key === 'ArrowDown') (row.nextElementSibling as HTMLElement | null)?.focus()
   else if (e.key === 'ArrowUp') (row.previousElementSibling as HTMLElement | null)?.focus()
   else return
   e.preventDefault()
 }
 function onKey(e: KeyboardEvent) {
+  if (e.ctrlKey && e.key === 'f' && searchBox.value) {
+    e.preventDefault()
+    searchBox.value.focus()
+    return
+  }
   const t = e.target as HTMLElement
   if (e.key !== 'Backspace' || t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
     return
@@ -113,70 +150,123 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       >
     </nav>
 
-    <TreemapChart
-      v-if="current && children.length"
-      :nodes="children"
-      :parent="current"
-      :highlighted="hovered"
-      @hover="hovered = $event"
-      @open="ex.open"
-    />
+    <div v-if="trail.length" class="search" role="search">
+      <input
+        ref="searchBox"
+        v-model="query"
+        type="search"
+        placeholder="Buscar por nombre (Ctrl+F)"
+        aria-label="Buscar por nombre"
+        @keydown.esc="search.clear()"
+      />
+    </div>
 
-    <table v-if="rows.length">
-      <thead>
-        <tr>
-          <th scope="col" :aria-sort="ariaSort('name')">
-            <button type="button" class="sort" @click="ex.sortBy('name')">Nombre{{ arrow('name') }}</button>
-          </th>
-          <th scope="col" class="num" :aria-sort="ariaSort('size')">
-            <button type="button" class="sort" @click="ex.sortBy('size')">En disco{{ arrow('size') }}</button>
-          </th>
-          <th v-if="logicalCol" scope="col" class="num">Lógico</th>
-          <th scope="col" class="num">% de la carpeta</th>
-          <th scope="col" class="num">Archivos</th>
-          <th scope="col" class="num" :aria-sort="ariaSort('modified')">
-            <button type="button" class="sort" @click="ex.sortBy('modified')">
-              Modificado{{ arrow('modified') }}
-            </button>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="n in rows"
-          :key="n.id"
-          tabindex="0"
-          :class="{ hovered: hovered === n.id }"
-          @mouseenter="hovered = n.id"
-          @mouseleave="hovered = null"
-          @keydown="onRowKey($event, n)"
-        >
-          <td class="name">
-            <button v-if="n.kind === 'dir'" type="button" class="link" tabindex="-1" @click="ex.open(n)">
-              📁 {{ n.name }}
-            </button>
-            <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
-            <span v-if="n.err" class="badge" :title="n.err">sin acceso</span>
-            <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
-              {{ label }}
-            </span>
-          </td>
-          <td class="num">{{ formatBytes(n.diskSize) }}</td>
-          <td v-if="logicalCol" class="num logical">{{ formatBytes(n.size) }}</td>
-          <td class="num share">
-            <span class="bar" :style="{ width: `${share(n.diskSize) * 100}%` }" aria-hidden="true"></span>
-            <span class="pct">{{ formatPercent(n.diskSize, current?.diskSize ?? 0) }}</span>
-          </td>
-          <td class="num">{{ formatCount(n.files) }}</td>
-          <td class="num date">{{ formatDate(n.modified) }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else-if="trail.length" class="empty">Carpeta vacía.</p>
-    <p v-if="rows.length" class="status more">
-      Mostrando {{ formatCount(rows.length) }} de {{ formatCount(total) }}
-      <button v-if="hasMore" type="button" @click="ex.loadMore">Cargar más</button>
-    </p>
+    <section v-if="searchActive" aria-label="Resultados de la búsqueda">
+      <p class="status" aria-live="polite">
+        <template v-if="searching">Buscando…</template>
+        <template v-else-if="search.error.value">
+          <span class="error-text">{{ search.error.value }}</span>
+        </template>
+        <template v-else-if="!hits.length">Sin resultados para «{{ query.trim() }}».</template>
+        <template v-else-if="more">
+          Más de {{ SEARCH_LIMIT }} resultados; se muestran los más grandes. Escribe algo más específico.
+        </template>
+        <template v-else>{{ formatCount(hits.length) }} resultados.</template>
+      </p>
+      <table v-if="hits.length" class="hits">
+        <thead>
+          <tr>
+            <th scope="col">Nombre</th>
+            <th scope="col">Carpeta</th>
+            <th scope="col" class="num">En disco</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="h in hits"
+            :key="h.id"
+            tabindex="0"
+            class="hit"
+            @click="pick(h)"
+            @keydown="onRowKey($event, () => pick(h))"
+          >
+            <td class="name">{{ h.kind === 'dir' ? '📁' : h.kind === 'link' ? '🔗' : '📄' }} {{ h.name }}</td>
+            <td class="dir" :title="h.dir">{{ h.dir }}</td>
+            <td class="num">{{ formatBytes(h.diskSize) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <template v-else>
+      <TreemapChart
+        v-if="current && children.length"
+        :nodes="children"
+        :parent="current"
+        :highlighted="hovered ?? found"
+        @hover="hovered = $event"
+        @open="ex.open"
+      />
+
+      <table v-if="rows.length">
+        <thead>
+          <tr>
+            <th scope="col" :aria-sort="ariaSort('name')">
+              <button type="button" class="sort" @click="ex.sortBy('name')">Nombre{{ arrow('name') }}</button>
+            </th>
+            <th scope="col" class="num" :aria-sort="ariaSort('size')">
+              <button type="button" class="sort" @click="ex.sortBy('size')">
+                En disco{{ arrow('size') }}
+              </button>
+            </th>
+            <th v-if="logicalCol" scope="col" class="num">Lógico</th>
+            <th scope="col" class="num">% de la carpeta</th>
+            <th scope="col" class="num">Archivos</th>
+            <th scope="col" class="num" :aria-sort="ariaSort('modified')">
+              <button type="button" class="sort" @click="ex.sortBy('modified')">
+                Modificado{{ arrow('modified') }}
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="n in rows"
+            :key="n.id"
+            tabindex="0"
+            :data-id="n.id"
+            :class="{ hovered: hovered === n.id, found: found === n.id }"
+            @mouseenter="hovered = n.id"
+            @mouseleave="hovered = null"
+            @keydown="onRowKey($event, () => ex.open(n))"
+          >
+            <td class="name">
+              <button v-if="n.kind === 'dir'" type="button" class="link" tabindex="-1" @click="ex.open(n)">
+                📁 {{ n.name }}
+              </button>
+              <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
+              <span v-if="n.err" class="badge" :title="n.err">sin acceso</span>
+              <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
+                {{ label }}
+              </span>
+            </td>
+            <td class="num">{{ formatBytes(n.diskSize) }}</td>
+            <td v-if="logicalCol" class="num logical">{{ formatBytes(n.size) }}</td>
+            <td class="num share">
+              <span class="bar" :style="{ width: `${share(n.diskSize) * 100}%` }" aria-hidden="true"></span>
+              <span class="pct">{{ formatPercent(n.diskSize, current?.diskSize ?? 0) }}</span>
+            </td>
+            <td class="num">{{ formatCount(n.files) }}</td>
+            <td class="num date">{{ formatDate(n.modified) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else-if="trail.length" class="empty">Carpeta vacía.</p>
+      <p v-if="rows.length" class="status more">
+        Mostrando {{ formatCount(rows.length) }} de {{ formatCount(total) }}
+        <button v-if="hasMore" type="button" @click="ex.loadMore">Cargar más</button>
+      </p>
+    </template>
   </main>
 </template>
 
@@ -308,6 +398,35 @@ tbody tr:focus-visible {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+.search input {
+  width: min(420px, 100%);
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.hit {
+  cursor: pointer;
+}
+.hit:hover {
+  background: var(--row-hover);
+}
+.dir {
+  color: var(--muted);
+  max-width: 0; /* lets the column shrink and ellipsize instead of widening the table */
+  width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.error-text {
+  color: var(--danger);
+}
+tr.found {
+  background: var(--accent-soft);
 }
 .notice {
   background: var(--accent-soft);
