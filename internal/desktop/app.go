@@ -168,6 +168,25 @@ func (a *App) ListChildren(root string, parentID int64, q model.ListQuery) (mode
 	return eng.ListChildren(root, parentID, q)
 }
 
+// Search returns up to limit entries whose name contains q, biggest first.
+// A newer search cancels this one, which then rejects.
+func (a *App) Search(root, q string, limit int) (model.SearchResult, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return model.SearchResult{}, err
+	}
+	return eng.Search(root, q, limit)
+}
+
+// Trail returns the entries from the root down to id, to show where a search hit is.
+func (a *App) Trail(root string, id int64) ([]model.Node, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return nil, err
+	}
+	return eng.Trail(root, id)
+}
+
 // Children returns up to limit children of parentID, biggest first.
 func (a *App) Children(root string, parentID int64, limit int) ([]model.Node, error) {
 	eng, err := a.engine()

@@ -60,6 +60,9 @@ type Engine struct {
 	prune      chan struct{} // asks the pruner for one more pass; capacity 1
 	stopPrune  context.CancelFunc
 	prunerDone chan struct{}
+
+	searchMu     sync.Mutex
+	cancelSearch context.CancelFunc // of the latest search
 }
 
 // New opens the engine with its database at dbPath, creating the directory if needed.
@@ -240,6 +243,58 @@ func (e *Engine) Path(root string, id int64) (string, error) {
 		return "", err
 	}
 	return filepath.Join(names...), nil
+}
+
+// Search returns the entries of the active index of root whose name contains
+// q, biggest first, each with the path of its folder. A search takes seconds on
+// huge indexes, so starting a new one cancels the previous one, which then
+// fails with context.Canceled instead of holding the database for nothing.
+func (e *Engine) Search(root, q string, limit int) (model.SearchResult, error) {
+	ctx, done := e.searchContext()
+	defer done()
+	scanID, err := e.activeScan(root)
+	if err != nil {
+		return model.SearchResult{}, err
+	}
+	res, err := e.st.Search(ctx, scanID, q, limit)
+	if err != nil {
+		return model.SearchResult{}, err
+	}
+	dirs := map[int64]string{} // hits often share a folder
+	for i, h := range res.Hits {
+		dir, ok := dirs[h.ParentID]
+		if !ok {
+			names, err := e.st.Path(ctx, scanID, h.ParentID)
+			if err != nil {
+				return model.SearchResult{}, err
+			}
+			dir = filepath.Join(names...)
+			dirs[h.ParentID] = dir
+		}
+		res.Hits[i].Dir = dir
+	}
+	return res, nil
+}
+
+// searchContext cancels the previous search and returns the context of a new one.
+func (e *Engine) searchContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	e.searchMu.Lock()
+	if e.cancelSearch != nil {
+		e.cancelSearch()
+	}
+	e.cancelSearch = cancel
+	e.searchMu.Unlock()
+	return ctx, cancel
+}
+
+// Trail returns the entries from the root of the active index down to id.
+func (e *Engine) Trail(root string, id int64) ([]model.Node, error) {
+	scanID, err := e.activeScan(root)
+	if err != nil {
+		return nil, err
+	}
+	return e.st.Trail(context.Background(), scanID, id)
 }
 
 func (e *Engine) activeScan(root string) (int64, error) {

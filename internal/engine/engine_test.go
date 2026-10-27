@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -389,5 +390,71 @@ func TestListChildrenPagesTheActiveIndex(t *testing.T) {
 	}
 	if _, err := e.ListChildren(dir, root.ID, model.ListQuery{Sort: "bogus"}); !errors.Is(err, ErrBadSort) {
 		t.Fatalf("bad sort: err = %v, want ErrBadSort", err)
+	}
+}
+
+func TestSearchGivesEachHitItsFolder(t *testing.T) {
+	e := newEngine(t)
+	dir := t.TempDir()
+	for _, f := range []string{"docs/Report.txt", "docs/sub/report-2.txt", "other.bin"} {
+		p := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scanToEnd(t, e, dir)
+
+	res, err := e.Search(dir, "REPORT", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, h := range res.Hits {
+		got[h.Name] = h.Dir
+	}
+	want := map[string]string{
+		"Report.txt":   filepath.Join(dir, "docs"),
+		"report-2.txt": filepath.Join(dir, "docs", "sub"),
+	}
+	if !maps.Equal(got, want) || res.More {
+		t.Fatalf("hits = %v (more %v), want %v", got, res.More, want)
+	}
+
+	var deep model.Hit
+	for _, h := range res.Hits {
+		if h.Name == "report-2.txt" {
+			deep = h
+		}
+	}
+	trail, err := e.Trail(dir, deep.ParentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trail) != 3 || trail[1].Name != "docs" || trail[2].ID != deep.ParentID {
+		t.Fatalf("Trail = %+v, want root › docs › sub", trail)
+	}
+}
+
+func TestSearchWithoutIndex(t *testing.T) {
+	e := newEngine(t)
+	if _, err := e.Search(t.TempDir(), "x", 10); !errors.Is(err, ErrNoScan) {
+		t.Fatalf("err = %v, want ErrNoScan", err)
+	}
+}
+
+func TestNewSearchCancelsThePreviousOne(t *testing.T) {
+	e := newEngine(t)
+	first, done := e.searchContext()
+	defer done()
+	second, done2 := e.searchContext()
+	defer done2()
+	if first.Err() == nil {
+		t.Fatal("the first search is still running")
+	}
+	if second.Err() != nil {
+		t.Fatal("the new search was cancelled")
 	}
 }

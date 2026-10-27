@@ -8,10 +8,12 @@ import {
   RemoveRoot,
   RenameRoot,
   Root,
+  Search,
   StartScan,
+  Trail,
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import type { Backend, Node, Page, Progress, RootInfo, Summary } from './types'
+import type { Backend, Node, Page, Progress, RootInfo, SearchResult, Summary } from './types'
 
 // Event names emitted by internal/desktop/app.go.
 const EVENT_PROGRESS = 'scan:progress'
@@ -31,6 +33,8 @@ export const wailsBackend: Backend = {
   root: async (root) => ((await Root(root)) as Node | null) ?? null,
   children: async (root, parentId, limit) => (await Children(root, parentId, limit)) as Node[],
   listChildren: async (root, parentId, q) => (await ListChildren(root, parentId, q)) as Page,
+  search: async (root, q, limit) => (await Search(root, q, limit)) as SearchResult,
+  trail: async (root, id) => (await Trail(root, id)) as Node[],
   // EventsOn returns its own unsubscribe function; EventsOff would remove every listener of the event.
   onProgress: (cb) => EventsOn(EVENT_PROGRESS, (p: Progress) => cb(p)),
   onSaving: (cb) => EventsOn(EVENT_SAVING, () => cb()),

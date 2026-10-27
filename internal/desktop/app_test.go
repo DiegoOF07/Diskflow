@@ -93,6 +93,15 @@ func TestRootAndChildrenAfterScan(t *testing.T) {
 	if err != nil || len(page.Items) != 3 || page.Total < 4 {
 		t.Fatalf("ListChildren = %d of %d, %v; want 3 of at least 4", len(page.Items), page.Total, err)
 	}
+	hit := kids[0]
+	res, err := a.Search(dir, hit.Name, 10)
+	if err != nil || len(res.Hits) == 0 || res.Hits[0].Dir == "" {
+		t.Fatalf("Search(%q) = %+v, %v; want hits with their folder", hit.Name, res, err)
+	}
+	trail, err := a.Trail(dir, res.Hits[0].ID)
+	if err != nil || len(trail) < 2 || trail[0].ID != root.ID {
+		t.Fatalf("Trail = %+v, %v; want root first", trail, err)
+	}
 }
 
 func TestEngineThatFailedToOpen(t *testing.T) {

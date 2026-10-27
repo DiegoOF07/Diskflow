@@ -20,4 +20,8 @@ export function RenameRoot(arg1:number,arg2:string):Promise<void>;
 
 export function Root(arg1:string):Promise<model.Node>;
 
+export function Search(arg1:string,arg2:string,arg3:number):Promise<model.SearchResult>;
+
 export function StartScan(arg1:string):Promise<void>;
+
+export function Trail(arg1:string,arg2:number):Promise<Array<model.Node>>;

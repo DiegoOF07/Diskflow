@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
 )
@@ -90,34 +91,73 @@ func (s *Store) TopDirs(ctx context.Context, scanID int64, limit int) ([]model.N
 		scanID, model.KindDir, clampLimit(limit))
 }
 
+// Search returns up to limit entries whose name contains q, biggest on disk
+// first, without their Dir. The root itself is never a hit.
+func (s *Store) Search(ctx context.Context, scanID int64, q string, limit int) (model.SearchResult, error) {
+	res := model.SearchResult{Hits: []model.Hit{}}
+	if q == "" {
+		return res, nil
+	}
+	limit = clampLimit(limit)
+	// One extra row tells whether there are more hits than the limit.
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+nodeColumns+", parent_id FROM entries WHERE scan_id = ? AND id <> 1 AND name LIKE ? ESCAPE '\\' ORDER BY disk_size DESC, id LIMIT ?",
+		scanID, "%"+likeEscaper.Replace(q)+"%", limit+1)
+	if err != nil {
+		return model.SearchResult{}, fmt.Errorf("store: search: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h model.Hit
+		if h.Node, err = scanNode(rows, &h.ParentID); err != nil {
+			return model.SearchResult{}, fmt.Errorf("store: search: %w", err)
+		}
+		res.Hits = append(res.Hits, h)
+	}
+	if err := rows.Err(); err != nil {
+		return model.SearchResult{}, fmt.Errorf("store: search: %w", err)
+	}
+	if len(res.Hits) > limit {
+		res.Hits, res.More = res.Hits[:limit], true
+	}
+	return res, nil
+}
+
+// likeEscaper makes %, _ and the escape character itself match literally.
+// LIKE already ignores case, for ASCII letters only.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// Trail returns the entries from the root down to id.
+func (s *Store) Trail(ctx context.Context, scanID, id int64) ([]model.Node, error) {
+	nodes, err := s.queryNodes(ctx, "trail", `
+		WITH RECURSIVE up(id, depth) AS (
+			SELECT id, 0 FROM entries WHERE scan_id = ?1 AND id = ?2
+			UNION ALL
+			SELECT e.parent_id, up.depth + 1
+			FROM entries e JOIN up ON e.scan_id = ?1 AND e.id = up.id
+			WHERE e.parent_id <> 0
+		)
+		SELECT `+nodeColumns+` FROM up JOIN entries USING (id)
+		WHERE entries.scan_id = ?1 ORDER BY depth DESC`, scanID, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
+		return nil, ErrNotFound
+	}
+	return nodes, nil
+}
+
 // Path returns the names from the root down to entry id. Joining them is left
 // to the caller, which knows the OS path rules.
 func (s *Store) Path(ctx context.Context, scanID, id int64) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		WITH RECURSIVE up(id, parent_id, name, depth) AS (
-			SELECT id, parent_id, name, 0 FROM entries WHERE scan_id = ?1 AND id = ?2
-			UNION ALL
-			SELECT e.id, e.parent_id, e.name, up.depth + 1
-			FROM entries e JOIN up ON e.scan_id = ?1 AND e.id = up.parent_id
-		)
-		SELECT name FROM up ORDER BY depth DESC`, scanID, id)
+	trail, err := s.Trail(ctx, scanID, id)
 	if err != nil {
-		return nil, fmt.Errorf("store: path: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("store: path: %w", err)
-		}
-		names = append(names, name)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store: path: %w", err)
-	}
-	if len(names) == 0 {
-		return nil, ErrNotFound
+	names := make([]string, len(trail))
+	for i, n := range trail {
+		names[i] = n.Name
 	}
 	return names, nil
 }
@@ -129,10 +169,12 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanNode(r rowScanner) (model.Node, error) {
+// scanNode reads nodeColumns, then any extra columns into extra.
+func scanNode(r rowScanner, extra ...any) (model.Node, error) {
 	var n model.Node
 	var kind model.Kind
-	if err := r.Scan(&n.ID, &n.Name, &kind, &n.Size, &n.DiskSize, &n.Flags, &n.Files, &n.Modified, &n.Err); err != nil {
+	dest := append([]any{&n.ID, &n.Name, &kind, &n.Size, &n.DiskSize, &n.Flags, &n.Files, &n.Modified, &n.Err}, extra...)
+	if err := r.Scan(dest...); err != nil {
 		return model.Node{}, err
 	}
 	n.Kind = kind.String()

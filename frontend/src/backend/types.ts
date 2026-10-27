@@ -31,6 +31,17 @@ export interface Page {
   total: number // children in the whole directory
 }
 
+/** One search result (model.Hit). */
+export interface Hit extends Node {
+  parentId: number
+  dir: string // absolute path of the folder that holds it
+}
+
+export interface SearchResult {
+  hits: Hit[] // biggest first
+  more: boolean // there were more hits than the limit
+}
+
 export interface Progress {
   files: number
   dirs: number
@@ -90,6 +101,10 @@ export interface Backend {
   /** Up to limit children, biggest on disk first. */
   children(root: string, parentId: number, limit: number): Promise<Node[]>
   listChildren(root: string, parentId: number, q: ListQuery): Promise<Page>
+  /** Entries whose name contains q, ignoring case. A newer search makes this one reject. */
+  search(root: string, q: string, limit: number): Promise<SearchResult>
+  /** The entries from the root down to id. */
+  trail(root: string, id: number): Promise<Node[]>
   onProgress(cb: (p: Progress) => void): Off
   /** The walk is over and the results are being saved; the scan can no longer be cancelled. */
   onSaving(cb: () => void): Off

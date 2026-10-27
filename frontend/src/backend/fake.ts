@@ -1,9 +1,9 @@
-import type { Backend, ListQuery, Node, Page, Progress, RootInfo, Summary } from './types'
+import type { Backend, Hit, ListQuery, Node, Page, Progress, RootInfo, SearchResult, Summary } from './types'
 
 /**
  * In-memory Backend for tests. children() and listChildren() answer immediately
- * unless the parent is held with hold(), which lets a test decide the order of
- * responses.
+ * unless the parent is held with hold(), and search() unless the query is held:
+ * that lets a test decide the order of responses.
  */
 export class FakeBackend implements Backend {
   picked: string | null = null // folder the dialog returns
@@ -13,14 +13,16 @@ export class FakeBackend implements Backend {
   kids = new Map<number, Node[]>()
   failStart: string | null = null
   failChildren: string | null = null
+  failSearch: string | null = null
+  searches: string[] = []
   started: string[] = []
   cancelled = 0
 
   private progressCbs = new Set<(p: Progress) => void>()
   private savingCbs = new Set<() => void>()
   private doneCbs = new Set<(s: Summary) => void>()
-  private held = new Map<number, (() => void)[]>() // several requests can wait on one parent
-  private holding = new Set<number>()
+  private held = new Map<number | string, (() => void)[]>() // several requests can wait on one key
+  private holding = new Set<number | string>()
 
   async pickFolder() {
     if (!this.picked) return null
@@ -80,14 +82,41 @@ export class FakeBackend implements Backend {
     })
     return { items: sorted.slice(q.offset, q.offset + q.limit), total: kids.length }
   }
-  private async kidsOf(parentId: number) {
-    if (this.holding.has(parentId)) {
-      await new Promise<void>((resolve) =>
-        this.held.set(parentId, [...(this.held.get(parentId) ?? []), resolve]),
-      )
+  async search(root: string, q: string, limit: number): Promise<SearchResult> {
+    this.searches.push(q)
+    await this.gate(q)
+    if (this.failSearch) throw this.failSearch
+    const needle = q.toLowerCase()
+    const hits: Hit[] = []
+    for (const [parentId, kids] of this.kids) {
+      for (const n of kids) {
+        if (!n.name.toLowerCase().includes(needle)) continue
+        const dir = (await this.trail(root, parentId)).map((p) => p.name).join('\\')
+        hits.push({ ...n, parentId, dir })
+      }
     }
+    hits.sort((a, b) => b.diskSize - a.diskSize || a.id - b.id)
+    return { hits: hits.slice(0, limit), more: hits.length > limit }
+  }
+  async trail(root: string, id: number) {
+    const top = this.roots.get(root)
+    const out: Node[] = []
+    for (let cur = id; cur !== top?.id;) {
+      const parent = [...this.kids].find(([, kids]) => kids.some((n) => n.id === cur))
+      if (!parent) throw 'store: not found'
+      out.unshift(parent[1].find((n) => n.id === cur)!)
+      cur = parent[0]
+    }
+    return [top!, ...out]
+  }
+  private async kidsOf(parentId: number) {
+    await this.gate(parentId)
     if (this.failChildren) throw this.failChildren
     return this.kids.get(parentId) ?? []
+  }
+  private async gate(key: number | string) {
+    if (!this.holding.has(key)) return
+    await new Promise<void>((resolve) => this.held.set(key, [...(this.held.get(key) ?? []), resolve]))
   }
   onProgress(cb: (p: Progress) => void) {
     this.progressCbs.add(cb)
@@ -102,13 +131,14 @@ export class FakeBackend implements Backend {
     return () => this.doneCbs.delete(cb)
   }
 
-  hold(parentId: number) {
-    this.holding.add(parentId)
+  /** Holds the requests for a parent id, or the searches for a query. */
+  hold(key: number | string) {
+    this.holding.add(key)
   }
-  release(parentId: number) {
-    this.holding.delete(parentId)
-    this.held.get(parentId)?.forEach((resolve) => resolve())
-    this.held.delete(parentId)
+  release(key: number | string) {
+    this.holding.delete(key)
+    this.held.get(key)?.forEach((resolve) => resolve())
+    this.held.delete(key)
   }
   emitProgress(p: Progress) {
     this.progressCbs.forEach((cb) => cb(p))

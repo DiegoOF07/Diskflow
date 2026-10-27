@@ -1,8 +1,11 @@
 import { computed, onScopeDispose, readonly, ref } from 'vue'
-import type { Backend, Node, Progress, SortKey, Summary } from '../../backend/types'
+import type { Backend, Hit, Node, Progress, SortKey, Summary } from '../../backend/types'
 
 /** Children loaded at a time: the UI never loads a whole directory at once. */
 export const PAGE_SIZE = 200
+
+// Pages loaded at most to bring a revealed entry into the table.
+const REVEAL_PAGES = 5
 
 // The first click on a column sorts it the way it is most useful.
 const FIRST_DESC: Record<SortKey, boolean> = { size: true, name: false, modified: true }
@@ -19,6 +22,7 @@ export function useExplorer(backend: Backend, root: string) {
   const rows = ref<Node[]>([]) // the table, in the chosen order and loaded page by page
   const total = ref(0) // children of the directory shown
   const sort = ref({ key: 'size' as SortKey, desc: true })
+  const found = ref<number | null>(null) // entry revealed from a search
   const progress = ref<Progress | null>(null)
   const summary = ref<Summary | null>(null)
   const scanning = ref(false)
@@ -41,7 +45,7 @@ export function useExplorer(backend: Backend, root: string) {
   ]
   onScopeDispose(() => offs.forEach((off) => off()))
 
-  async function attempt(fn: () => Promise<void>) {
+  async function attempt(fn: () => Promise<unknown>) {
     error.value = ''
     try {
       await fn()
@@ -62,15 +66,18 @@ export function useExplorer(backend: Backend, root: string) {
       limit: PAGE_SIZE,
     })
 
+  /** Resolves to false if a newer navigation replaced this one. */
   async function show(newTrail: Node[]) {
     const id = ++seq
     const dir = newTrail[newTrail.length - 1]
     const [kids, first] = await Promise.all([backend.children(root, dir.id, PAGE_SIZE), page(dir, 0)])
-    if (id !== seq) return
+    if (id !== seq) return false
     trail.value = newTrail
     children.value = kids
     rows.value = first.items
     total.value = first.total
+    found.value = null
+    return true
   }
 
   async function loadRoot() {
@@ -118,20 +125,31 @@ export function useExplorer(backend: Backend, root: string) {
 
   let loadingMore = false
 
-  const loadMore = () =>
+  async function appendPage() {
+    const dir = current.value
+    if (!dir || !hasMore.value || loadingMore) return
+    const id = seq
+    loadingMore = true
+    try {
+      const next = await page(dir, rows.value.length)
+      if (id !== seq) return // the user navigated or re-sorted meanwhile
+      rows.value = [...rows.value, ...next.items]
+      total.value = next.total
+    } finally {
+      loadingMore = false
+    }
+  }
+
+  const loadMore = () => attempt(appendPage)
+
+  /** Opens the folder that holds a search hit and marks the hit's row. */
+  const reveal = (hit: Hit) =>
     attempt(async () => {
-      const dir = current.value
-      if (!dir || !hasMore.value || loadingMore) return
+      if (!(await show(await backend.trail(root, hit.parentId)))) return
       const id = seq
-      loadingMore = true
-      try {
-        const next = await page(dir, rows.value.length)
-        if (id !== seq) return // the user navigated or re-sorted meanwhile
-        rows.value = [...rows.value, ...next.items]
-        total.value = next.total
-      } finally {
-        loadingMore = false
-      }
+      const loaded = () => rows.value.some((n) => n.id === hit.id)
+      for (let i = 0; i < REVEAL_PAGES && !loaded() && hasMore.value; i++) await appendPage()
+      if (id === seq) found.value = hit.id
     })
 
   // Settles once the current index is shown, or the error is.
@@ -145,6 +163,7 @@ export function useExplorer(backend: Backend, root: string) {
     rows: readonly(rows),
     total: readonly(total),
     sort: readonly(sort),
+    found: readonly(found),
     progress: readonly(progress),
     summary: readonly(summary),
     scanning: readonly(scanning),
@@ -159,5 +178,6 @@ export function useExplorer(backend: Backend, root: string) {
     up,
     sortBy,
     loadMore,
+    reveal,
   }
 }

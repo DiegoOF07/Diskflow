@@ -225,6 +225,39 @@ describe('table', () => {
   })
 })
 
+describe('reveal', () => {
+  it('opens the folder of a search hit and marks it', async () => {
+    const ex = setup()
+    await ex.ready
+    await ex.reveal({ ...file(4, 'main.go', 200), parentId: 2, dir: `${ROOT}\\src` })
+    expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT, 'src'])
+    expect(ex.found.value).toBe(4)
+    await ex.up()
+    expect(ex.found.value).toBeNull()
+  })
+
+  it('loads pages until the hit is in the table', async () => {
+    backend.kids.set(
+      2,
+      Array.from({ length: PAGE_SIZE * 2 }, (_, i) => file(100 + i, `f${i}`, PAGE_SIZE * 2 - i)),
+    )
+    const ex = setup()
+    await ex.ready
+    const last = backend.kids.get(2)!.at(-1)!
+    await ex.reveal({ ...last, parentId: 2, dir: '' })
+    expect(ex.rows.value).toHaveLength(PAGE_SIZE * 2)
+    expect(ex.found.value).toBe(last.id)
+  })
+
+  it('shows the error of a hit that is no longer in the index', async () => {
+    const ex = setup()
+    await ex.ready
+    await ex.reveal({ ...file(99, 'gone', 1), parentId: 98, dir: '' })
+    expect(ex.error.value).toBe('store: not found')
+    expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT])
+  })
+})
+
 it('unsubscribes from scan events when its scope is disposed', () => {
   setup()
   expect(backend.listeners).toBe(3)
