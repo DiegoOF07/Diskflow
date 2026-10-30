@@ -7,7 +7,7 @@ import { formatBytes } from '../explorer/format'
 import { rootStatus } from './status'
 import { useRoots } from './useRoots'
 
-const { roots, loaded, loading, removing, error, load, add, rename, remove } = useRoots(useBackend())
+const { roots, loaded, loading, adding, removing, error, load, add, rename, remove } = useRoots(useBackend())
 const router = useRouter()
 void load()
 
@@ -50,7 +50,9 @@ async function confirmRemove(id: number) {
   <main class="home">
     <header class="toolbar">
       <h1>DiskFlow</h1>
-      <button type="button" class="primary" @click="addFolder">Agregar carpeta</button>
+      <button type="button" class="primary" :disabled="!loaded || adding" @click="addFolder">
+        Agregar carpeta
+      </button>
     </header>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -64,7 +66,7 @@ async function confirmRemove(id: number) {
     <div v-if="loaded && !roots.length" class="first-run">
       <p>Agrega una carpeta para ver en qué se va su espacio.</p>
       <p class="hint">DiskFlow solo lee: nunca borra, mueve ni abre tus archivos.</p>
-      <button type="button" class="primary" @click="addFolder">Agregar carpeta</button>
+      <button type="button" class="primary" :disabled="adding" @click="addFolder">Agregar carpeta</button>
     </div>
 
     <ul v-else class="roots">

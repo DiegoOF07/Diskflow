@@ -11,6 +11,7 @@ export function useRoots(backend: Backend) {
   const roots = ref<RootInfo[]>([])
   const loaded = ref(false) // distinguishes "no folders yet" from "still loading"
   const loading = ref(false)
+  const adding = ref(false) // the folder dialog is open
   const removing = ref<number[]>([]) // folders being removed; their button is disabled
   const error = ref('')
 
@@ -41,9 +42,15 @@ export function useRoots(backend: Backend) {
 
   /** Asks for a folder and adds it; resolves to it, or null if the dialog was closed. */
   const add = async () => {
-    const added = await attempt(() => backend.pickFolder())
-    if (added) await load()
-    return added
+    if (adding.value) return null // one dialog at a time
+    adding.value = true
+    try {
+      const added = await attempt(() => backend.pickFolder())
+      if (added) await load()
+      return added
+    } finally {
+      adding.value = false
+    }
   }
 
   const rename = (id: number, name: string) =>
@@ -68,6 +75,7 @@ export function useRoots(backend: Backend) {
     roots: readonly(roots),
     loaded: readonly(loaded),
     loading: readonly(loading),
+    adding: readonly(adding),
     removing: readonly(removing),
     error: readonly(error),
     load,

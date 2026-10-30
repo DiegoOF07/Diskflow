@@ -25,6 +25,7 @@ const failure = (f: BackendError | string) => (typeof f === 'string' ? new Backe
 export class FakeBackend implements Backend {
   picked: string | null = null // folder the dialog returns
   catalog: RootInfo[] = []
+  pickCalls = 0
   failList: Failure = null
   failRemove: Failure = null
   removeCalls = 0
@@ -51,6 +52,8 @@ export class FakeBackend implements Backend {
   private holding = new Set<number | string>()
 
   async pickFolder() {
+    this.pickCalls++
+    await this.gate('pick')
     if (!this.picked) return null
     const path = this.picked
     let r = this.catalog.find((c) => c.path === path)
@@ -178,7 +181,7 @@ export class FakeBackend implements Backend {
     return () => this.doneCbs.delete(cb)
   }
 
-  /** Holds the requests for a parent id, the searches for a query, `remove:<id>` or 'unreadable'. */
+  /** Holds the requests for a parent id, the searches for a query, `remove:<id>`, 'unreadable' or 'pick'. */
   hold(key: number | string) {
     this.holding.add(key)
   }
