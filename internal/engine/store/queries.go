@@ -94,9 +94,8 @@ func (s *Store) TopDirs(ctx context.Context, scanID int64, limit int) ([]model.N
 // Search returns up to limit entries whose name contains q, biggest on disk
 // first, without their Dir. The root itself is never a hit.
 func (s *Store) Search(ctx context.Context, scanID int64, q string, limit int) (model.SearchResult, error) {
-	res := model.SearchResult{Hits: []model.Hit{}}
 	if q == "" {
-		return res, nil
+		return model.SearchResult{Hits: []model.Hit{}}, nil
 	}
 	limit = clampLimit(limit)
 	// One extra row tells whether there are more hits than the limit.
@@ -106,21 +105,46 @@ func (s *Store) Search(ctx context.Context, scanID int64, q string, limit int) (
 	if err != nil {
 		return model.SearchResult{}, fmt.Errorf("store: search: %w", err)
 	}
+	return collectHits(rows, limit, "search")
+}
+
+// collectHits reads rows of nodeColumns plus parent_id, fetched with one row
+// over limit to tell whether there are more.
+func collectHits(rows *sql.Rows, limit int, what string) (model.SearchResult, error) {
 	defer rows.Close()
+	res := model.SearchResult{Hits: []model.Hit{}}
 	for rows.Next() {
 		var h model.Hit
+		var err error
 		if h.Node, err = scanNode(rows, &h.ParentID); err != nil {
-			return model.SearchResult{}, fmt.Errorf("store: search: %w", err)
+			return model.SearchResult{}, fmt.Errorf("store: %s: %w", what, err)
 		}
 		res.Hits = append(res.Hits, h)
 	}
 	if err := rows.Err(); err != nil {
-		return model.SearchResult{}, fmt.Errorf("store: search: %w", err)
+		return model.SearchResult{}, fmt.Errorf("store: %s: %w", what, err)
 	}
 	if len(res.Hits) > limit {
 		res.Hits, res.More = res.Hits[:limit], true
 	}
 	return res, nil
+}
+
+// unreadableQuery lists the entries of a scan with a read error, in walk order.
+// Without statistics the planner prefers the primary key, which also gives
+// that order but reads every entry of the scan; INDEXED BY rules that out, and
+// fails instead of falling back if the WHERE stops matching the index's.
+const unreadableQuery = "SELECT " + nodeColumns + ", parent_id FROM entries INDEXED BY entries_unreadable WHERE scan_id = ? AND err <> '' ORDER BY id LIMIT ?"
+
+// Unreadable returns up to limit entries that the scan could not read
+// (Node.Err set), without their Dir.
+func (s *Store) Unreadable(ctx context.Context, scanID int64, limit int) (model.SearchResult, error) {
+	limit = clampLimit(limit)
+	rows, err := s.rd.QueryContext(ctx, unreadableQuery, scanID, limit+1)
+	if err != nil {
+		return model.SearchResult{}, fmt.Errorf("store: unreadable: %w", err)
+	}
+	return collectHits(rows, limit, "unreadable")
 }
 
 // likeEscaper makes %, _ and the escape character itself match literally.

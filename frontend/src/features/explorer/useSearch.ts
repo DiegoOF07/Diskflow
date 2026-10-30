@@ -1,4 +1,5 @@
 import { onScopeDispose, readonly, ref, watch } from 'vue'
+import { errorMessage } from '../../backend/errors'
 import type { Backend, Hit } from '../../backend/types'
 
 /** Hits shown at most; beyond that the user is asked to refine the search. */
@@ -55,7 +56,7 @@ export function useSearch(backend: Backend, root: string) {
       if (id !== seq) return // a newer search cancelled this one in the backend
       hits.value = []
       more.value = false
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = errorMessage(e)
     } finally {
       inFlight--
       if (id === seq) searching.value = false

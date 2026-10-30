@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine"
 	"github.com/DiegoOF07/Diskflow/internal/engine/fixture"
@@ -222,4 +223,32 @@ func TestActionsUseTheResolvedPath(t *testing.T) {
 	if len(shown) != 1 || len(copied) != 1 {
 		t.Fatal("an action ran on a path that did not resolve")
 	}
+}
+
+// Wails runs OnStartup in a goroutine while the page loads, so the first calls
+// can arrive before the database is open. They must wait, not fail.
+func TestCallsWaitForStartup(t *testing.T) {
+	release := make(chan struct{})
+	a := NewApp()
+	a.open = func() (*engine.Engine, error) {
+		<-release
+		return engine.New(filepath.Join(t.TempDir(), "diskflow.db"), engine.Options{})
+	}
+	go a.startup(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := a.ListRoots()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("ListRoots returned before startup finished: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("ListRoots after startup: %v", err)
+	}
+	a.shutdown(context.Background())
 }

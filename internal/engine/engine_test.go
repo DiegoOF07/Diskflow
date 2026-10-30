@@ -204,8 +204,8 @@ func TestInvalidRoots(t *testing.T) {
 	if _, err := e.StartScan(file, Callbacks{}); !errors.Is(err, ErrNotDir) {
 		t.Errorf("file root: err = %v, want ErrNotDir", err)
 	}
-	if _, err := e.StartScan(missing, Callbacks{}); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("missing root: err = %v, want os.ErrNotExist", err)
+	if _, err := e.StartScan(missing, Callbacks{}); !errors.Is(err, ErrRootUnavailable) || !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("missing root: err = %v, want ErrRootUnavailable wrapping os.ErrNotExist", err)
 	}
 	if _, err := e.Root(file); !errors.Is(err, ErrNoScan) {
 		t.Errorf("Root of never-scanned path: err = %v, want ErrNoScan", err)
@@ -520,5 +520,38 @@ func TestRemovedRootIsPrunedInTheBackground(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("no pruning after RemoveRoot")
+	}
+}
+
+func TestUnreadableGivesEachEntryItsFolder(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs Unix permissions and a non-root user")
+	}
+	e := newEngine(t)
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "a", "locked")
+	if err := os.MkdirAll(filepath.Join(locked, "inner"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(locked, 0)
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	scanToEnd(t, e, dir)
+
+	res, err := e.Unreadable(dir, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Hits) != 1 || res.More {
+		t.Fatalf("Unreadable = %+v, want only locked", res)
+	}
+	if h := res.Hits[0]; h.Name != "locked" || h.Dir != filepath.Join(dir, "a") || h.Err != model.ErrAccessDenied {
+		t.Fatalf("hit = %+v, want locked inside a, access_denied", h)
+	}
+}
+
+func TestUnreadableWithoutIndex(t *testing.T) {
+	e := newEngine(t)
+	if _, err := e.Unreadable(t.TempDir(), 10); !errors.Is(err, ErrNoScan) {
+		t.Fatalf("err = %v, want ErrNoScan", err)
 	}
 }

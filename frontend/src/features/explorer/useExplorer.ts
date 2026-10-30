@@ -1,4 +1,5 @@
 import { computed, onScopeDispose, readonly, ref } from 'vue'
+import { errorCode as codeOf, errorMessage, type ErrorCode } from '../../backend/errors'
 import type { Backend, Hit, Node, Progress, SortKey, Summary } from '../../backend/types'
 
 /** Children loaded at a time: the UI never loads a whole directory at once. */
@@ -32,6 +33,7 @@ export function useExplorer(backend: Backend, root: string) {
   const scanning = ref(false)
   const saving = ref(false) // the scan is past the point where it can be cancelled
   const error = ref('')
+  const errorCode = ref<ErrorCode | null>(null) // lets the view offer a way out, e.g. for a missing folder
 
   const current = computed(() => trail.value.at(-1) ?? null)
   const hasMore = computed(() => rows.value.length < total.value)
@@ -55,10 +57,12 @@ export function useExplorer(backend: Backend, root: string) {
 
   async function attempt(fn: () => Promise<unknown>) {
     error.value = ''
+    errorCode.value = null
     try {
       await fn()
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e) // Wails rejects with the Go error string
+      error.value = errorMessage(e)
+      errorCode.value = codeOf(e)
     }
   }
 
@@ -196,6 +200,7 @@ export function useExplorer(backend: Backend, root: string) {
     scanning: readonly(scanning),
     saving: readonly(saving),
     error: readonly(error),
+    errorCode: readonly(errorCode),
     current,
     hasMore,
     scan,

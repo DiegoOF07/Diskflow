@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watchEffect } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { errorCode, errorMessage } from '../../backend/errors'
 import { useBackend } from '../../backend/inject'
 import type { RootInfo } from '../../backend/types'
 import ExplorerView from './ExplorerView.vue'
@@ -11,18 +12,33 @@ const backend = useBackend()
 const router = useRouter()
 const info = ref<RootInfo | null>(null)
 const error = ref('')
+const gone = ref(false) // removed from the catalog meanwhile
 
-watchEffect(async () => {
-  const id = props.id
-  info.value = null
-  error.value = ''
+async function load(id: number) {
   try {
     const r = await backend.getRoot(id)
     if (id === props.id) info.value = r
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    if (id !== props.id) return
+    error.value = errorMessage(e)
+    gone.value = errorCode(e) === 'not_found'
   }
-})
+}
+
+watch(
+  () => props.id,
+  (id) => {
+    info.value = null
+    error.value = ''
+    gone.value = false
+    void load(id)
+  },
+  { immediate: true },
+)
+
+// A finished scan changes the folder's index and last attempt.
+const off = backend.onDone(() => void load(props.id))
+onScopeDispose(off)
 
 // "Analizar" from the home screen arrives as ?scan=1. Drop it from the URL,
 // so going back to this page later doesn't start another scan.
@@ -31,9 +47,9 @@ if (props.scan) void router.replace({ query: {} })
 </script>
 
 <template>
-  <ExplorerView v-if="info" :key="info.id" :root="info.path" :name="info.name" :autoscan="autoscan" />
+  <ExplorerView v-if="info" :key="info.id" :info="info" :autoscan="autoscan" />
   <main v-else-if="error" class="missing">
-    <p role="alert">Esta carpeta ya no está en el catálogo.</p>
+    <p role="alert">{{ gone ? 'Esta carpeta ya no está en el catálogo.' : error }}</p>
     <RouterLink to="/">Volver al inicio</RouterLink>
   </main>
 </template>

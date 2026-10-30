@@ -73,6 +73,7 @@ export interface RootInfo {
   name: string // the user's name for it, or the folder's own name
   path: string
   createdAt: number
+  available: boolean // false if the folder is gone or its drive is disconnected
   index: ScanInfo | null // latest completed scan, the one the explorer shows
   last: ScanInfo | null // latest attempt, whatever its status
 }
@@ -86,7 +87,8 @@ export type Off = () => void
 /**
  * Everything the UI needs from the desktop shell. Components depend on this
  * interface, never on Wails, so tests can pass a fake and a future Wails v3
- * migration only touches the implementation.
+ * migration only touches the implementation. Every method rejects with a
+ * BackendError (errors.ts).
  */
 export interface Backend {
   /** Adds the chosen folder to the catalog; resolves to null if the user closes the dialog. */
@@ -114,6 +116,8 @@ export interface Backend {
   showInExplorer(root: string, id: number): Promise<void>
   /** Puts the entry's absolute path in the clipboard. */
   copyPath(root: string, id: number): Promise<void>
+  /** Entries the last scan could not read, each with its folder. */
+  unreadable(root: string, limit: number): Promise<SearchResult>
   /** The entries from the root down to id. */
   trail(root: string, id: number): Promise<Node[]>
   onProgress(cb: (p: Progress) => void): Off

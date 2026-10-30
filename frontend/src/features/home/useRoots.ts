@@ -1,4 +1,5 @@
 import { onScopeDispose, readonly, ref } from 'vue'
+import { errorMessage } from '../../backend/errors'
 import type { Backend, RootInfo } from '../../backend/types'
 
 /**
@@ -9,6 +10,7 @@ import type { Backend, RootInfo } from '../../backend/types'
 export function useRoots(backend: Backend) {
   const roots = ref<RootInfo[]>([])
   const loaded = ref(false) // distinguishes "no folders yet" from "still loading"
+  const loading = ref(false)
   const removing = ref<number[]>([]) // folders being removed; their button is disabled
   const error = ref('')
 
@@ -17,15 +19,20 @@ export function useRoots(backend: Backend) {
     try {
       return await fn()
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e) // Wails rejects with the Go error string
+      error.value = errorMessage(e)
       return null
     }
   }
 
   const load = () =>
     attempt(async () => {
-      roots.value = await backend.listRoots()
-      loaded.value = true
+      loading.value = true
+      try {
+        roots.value = await backend.listRoots()
+        loaded.value = true
+      } finally {
+        loading.value = false
+      }
     })
 
   // A scan that finishes changes that folder's summary.
@@ -60,6 +67,7 @@ export function useRoots(backend: Backend) {
   return {
     roots: readonly(roots),
     loaded: readonly(loaded),
+    loading: readonly(loading),
     removing: readonly(removing),
     error: readonly(error),
     load,

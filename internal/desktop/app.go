@@ -27,30 +27,56 @@ var errNotReady = errors.New("desktop: the index database is not available")
 // App is bound to the frontend: every exported method becomes a TS function.
 // It only translates between Wails and the engine; the logic lives in the engine.
 type App struct {
+	ctx          context.Context // the Wails runtime's; nil until startup
 	eng          *engine.Engine
 	initErr      error                       // why eng is nil, if it is
 	emit         func(name string, data any) // the Wails event bus; replaced in tests
 	chooseFolder func() (string, error)      // the native folder dialog; replaced in tests
 	showFile     func(path string) error     // selects path in Explorer; replaced in tests
 	copyText     func(text string) error     // the clipboard; replaced in tests
+	open         func() (*engine.Engine, error)
+	ready        chan struct{} // closed when startup has finished; nil in tests that build App directly
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{open: openEngine, ready: make(chan struct{})}
 }
 
+// startup runs in its own goroutine while the page loads (Wails on Windows),
+// so bound methods call wait before touching what it sets.
 func (a *App) startup(ctx context.Context) {
+	defer close(a.ready)
+	a.ctx = ctx
 	a.emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
 	a.chooseFolder = func() (string, error) {
 		return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: "Carpeta a analizar"})
 	}
 	a.showFile = showInFileManager
 	a.copyText = func(text string) error { return runtime.ClipboardSetText(ctx, text) }
-	a.eng, a.initErr = openEngine()
+	a.eng, a.initErr = a.open()
+}
+
+// wait blocks until startup has finished. Opening the database can take
+// seconds when a migration runs, and the page calls in the meantime.
+func (a *App) wait() {
+	if a.ready != nil {
+		<-a.ready
+	}
+}
+
+// focus brings the window to the front, restoring it if it was minimised.
+func (a *App) focus() {
+	a.wait()
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowUnminimise(a.ctx)
+	runtime.WindowShow(a.ctx)
 }
 
 // shutdown cancels a running scan and closes the database before the process exits.
 func (a *App) shutdown(context.Context) {
+	a.wait()
 	if a.eng != nil {
 		a.eng.Close()
 	}
@@ -67,6 +93,7 @@ func openEngine() (*engine.Engine, error) {
 }
 
 func (a *App) engine() (*engine.Engine, error) {
+	a.wait()
 	if a.eng == nil {
 		return nil, fmt.Errorf("%w: %v", errNotReady, a.initErr)
 	}
@@ -151,6 +178,7 @@ func (a *App) ScanState(root string) (string, error) {
 }
 
 func (a *App) CancelScan() {
+	a.wait()
 	if a.eng != nil {
 		a.eng.Cancel()
 	}
@@ -221,6 +249,7 @@ func (a *App) resolve(root string, id int64) (string, error) {
 
 // CancelSearch stops the running search; the UI calls it when the search box is cleared.
 func (a *App) CancelSearch() {
+	a.wait()
 	if a.eng != nil {
 		a.eng.CancelSearch()
 	}
@@ -233,6 +262,16 @@ func (a *App) Trail(root string, id int64) ([]model.Node, error) {
 		return nil, err
 	}
 	return eng.Trail(root, id)
+}
+
+// Unreadable returns up to limit entries the last scan could not read, with
+// their folders, for the partial coverage panel.
+func (a *App) Unreadable(root string, limit int) (model.SearchResult, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return model.SearchResult{}, err
+	}
+	return eng.Unreadable(root, limit)
 }
 
 // Children returns up to limit children of parentID, biggest first.

@@ -1,21 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
-import type { Hit, Node, SortKey } from '../../backend/types'
-import { formatBytes, formatCount, formatDate, formatPercent } from './format'
+import type { Hit, Node, RootInfo, SortKey } from '../../backend/types'
+import { previousIndexNote } from '../home/status'
+import { formatAgo, formatBytes, formatCount, formatDate, formatPercent } from './format'
 import { flagLabels, isEstimated, showLogical, sizeNote } from './size'
 import TreemapChart from './treemap/TreemapChart.vue'
 import { useExplorer } from './useExplorer'
 import { SEARCH_LIMIT, useSearch } from './useSearch'
+import { UNREADABLE_LIMIT, unreadableReason, useUnreadable } from './useUnreadable'
 
 const props = defineProps<{
-  root: string // folder path; the explorer is recreated for another folder
-  name: string
+  info: RootInfo // the explorer is recreated for another folder, so its path never changes
   autoscan?: boolean // start a scan as soon as the current index is shown
 }>()
 
 const backend = useBackend()
-const ex = useExplorer(backend, props.root)
+const ex = useExplorer(backend, props.info.path)
 const {
   trail,
   children,
@@ -29,10 +30,12 @@ const {
   scanning,
   saving,
   error,
+  errorCode,
   current,
   hasMore,
 } = ex
-const search = useSearch(backend, props.root)
+const search = useSearch(backend, props.info.path)
+const unreadable = useUnreadable(backend, props.info.path)
 const { query, hits, more, searching } = search
 const searchBox = useTemplateRef<HTMLInputElement>('searchBox')
 const searchActive = computed(() => query.value.trim() !== '')
@@ -128,8 +131,8 @@ onBeforeUnmount(() => {
   <main class="explorer">
     <header class="toolbar">
       <RouterLink to="/" class="back">← Inicio</RouterLink>
-      <h1 class="title">{{ name }}</h1>
-      <code class="root" :title="root">{{ root }}</code>
+      <h1 class="title">{{ info.name }}</h1>
+      <code class="root" :title="info.path">{{ info.path }}</code>
       <button type="button" class="primary" :disabled="scanning" @click="ex.scan">Analizar</button>
       <button
         type="button"
@@ -156,9 +159,25 @@ onBeforeUnmount(() => {
         — {{ STATUS_TEXT[summary.status] }} en {{ (summary.elapsedMs / 1000).toFixed(1) }} s
         <template v-if="summary.error">: {{ summary.error }}</template>
       </span>
+      <span v-else-if="info.index" :title="formatDate(info.index.finishedAt)">
+        Analizado {{ formatAgo(info.index.finishedAt) }}
+      </span>
     </p>
 
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="error" class="error" role="alert">
+      {{ error }}
+      <RouterLink v-if="errorCode === 'root_unavailable'" to="/">Quitarla desde Inicio</RouterLink>
+    </p>
+
+    <p v-if="!info.available && errorCode !== 'root_unavailable'" class="notice warn" role="status">
+      No se encuentra esta carpeta: puede que se haya movido o borrado, o que su unidad esté desconectada.
+      <template v-if="trail.length">Se muestra su último análisis. </template>
+      Si ya no existe, puedes <RouterLink to="/">quitarla desde Inicio</RouterLink>.
+    </p>
+
+    <p v-if="!scanning && previousIndexNote(info)" class="notice" role="status">
+      {{ previousIndexNote(info) }}
+    </p>
 
     <p v-if="!trail.length && !scanning" class="empty">
       Esta carpeta aún no se ha analizado. Pulsa <strong>Analizar</strong>.
@@ -236,6 +255,46 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
+      <p v-if="info.index?.errors && trail.length" class="coverage">
+        <button type="button" class="link" :aria-expanded="unreadable.open.value" @click="unreadable.toggle">
+          {{ formatCount(info.index.errors) }} elementos sin acceso
+        </button>
+        — no se pudieron leer, así que el total no los incluye.
+      </p>
+      <section v-if="unreadable.open.value" class="unreadable" aria-label="Elementos sin acceso">
+        <p class="status" aria-live="polite">
+          <template v-if="unreadable.loading.value">Cargando…</template>
+          <span v-else-if="unreadable.error.value" class="error-text">{{ unreadable.error.value }}</span>
+          <template v-else-if="unreadable.more.value">
+            Se muestran los primeros {{ UNREADABLE_LIMIT }}.
+          </template>
+        </p>
+        <table v-if="unreadable.hits.value.length" class="hits">
+          <thead>
+            <tr>
+              <th scope="col">Nombre</th>
+              <th scope="col">Carpeta</th>
+              <th scope="col">Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="h in unreadable.hits.value"
+              :key="h.id"
+              tabindex="0"
+              class="hit"
+              title="Mostrar dónde está"
+              @click="pick(h)"
+              @keydown="onRowKey($event, () => pick(h))"
+            >
+              <td class="name">{{ h.kind === 'dir' ? '📁' : '📄' }} {{ h.name }}</td>
+              <td class="dir" :title="h.dir">{{ h.dir }}</td>
+              <td>{{ unreadableReason(h.err) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
       <TreemapChart
         v-if="current && children.length"
         :nodes="children"
@@ -283,7 +342,7 @@ onBeforeUnmount(() => {
                 📁 {{ n.name }}
               </button>
               <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
-              <span v-if="n.err" class="badge" :title="n.err">sin acceso</span>
+              <span v-if="n.err" class="badge" :title="unreadableReason(n.err)">sin acceso</span>
               <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
                 {{ label }}
               </span>
@@ -549,5 +608,19 @@ tr.found {
   background: var(--accent-soft);
   padding: 8px 12px;
   border-radius: 6px;
+}
+.notice.warn {
+  background: var(--danger-bg);
+}
+.notice a,
+.error a {
+  color: var(--accent);
+}
+.coverage {
+  color: var(--muted);
+  margin: 8px 0;
+}
+.unreadable {
+  margin-bottom: 16px;
 }
 </style>

@@ -33,3 +33,5 @@ export function ShowInExplorer(arg1:string,arg2:number):Promise<void>;
 export function StartScan(arg1:string):Promise<void>;
 
 export function Trail(arg1:string,arg2:number):Promise<Array<model.Node>>;
+
+export function Unreadable(arg1:string,arg2:number):Promise<model.SearchResult>;

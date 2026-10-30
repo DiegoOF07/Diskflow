@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,12 +22,8 @@ func (e *Engine) AddRoot(path, name string) (model.RootInfo, error) {
 	if err != nil {
 		return model.RootInfo{}, err
 	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return model.RootInfo{}, fmt.Errorf("engine: %w", err)
-	}
-	if !info.IsDir() {
-		return model.RootInfo{}, fmt.Errorf("%w: %s", ErrNotDir, abs)
+	if err := checkDir(abs); err != nil {
+		return model.RootInfo{}, err
 	}
 	id, err := e.st.AddRoot(context.Background(), foldCase(abs, caseInsensitiveFS), abs, strings.TrimSpace(name))
 	if err != nil {
@@ -110,9 +107,32 @@ func (e *Engine) rootInfo(row store.RootRow) (model.RootInfo, error) {
 		Name:      displayName(row.Name, row.Path),
 		Path:      row.Path,
 		CreatedAt: row.CreatedAt,
+		Available: available(row.Path),
 		Index:     index,
 		Last:      last,
 	}, nil
+}
+
+// checkDir tells why path cannot be scanned: ErrRootUnavailable if it is gone
+// or its drive is disconnected, a permission error, or ErrNotDir.
+func checkDir(path string) error {
+	info, err := os.Stat(path)
+	switch {
+	case errors.Is(err, fs.ErrPermission):
+		return fmt.Errorf("engine: %w", err)
+	case err != nil:
+		return fmt.Errorf("%w: %w", ErrRootUnavailable, err)
+	case !info.IsDir():
+		return fmt.Errorf("%w: %s", ErrNotDir, path)
+	}
+	return nil
+}
+
+// available reports whether a catalog folder is there to scan or act on.
+// A folder that exists but denies access is still there.
+func available(path string) bool {
+	err := checkDir(path)
+	return err == nil || errors.Is(err, fs.ErrPermission)
 }
 
 // displayName is the user's name for a folder or, without one, the folder's

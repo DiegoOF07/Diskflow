@@ -17,8 +17,8 @@ func TestAddRootValidatesTheFolder(t *testing.T) {
 	if _, err := e.AddRoot(file, ""); !errors.Is(err, ErrNotDir) {
 		t.Errorf("AddRoot(file) err = %v, want ErrNotDir", err)
 	}
-	if _, err := e.AddRoot(filepath.Join(t.TempDir(), "missing"), ""); err == nil {
-		t.Error("AddRoot(missing) succeeded")
+	if _, err := e.AddRoot(filepath.Join(t.TempDir(), "missing"), ""); !errors.Is(err, ErrRootUnavailable) {
+		t.Errorf("AddRoot(missing) err = %v, want ErrRootUnavailable", err)
 	}
 }
 
@@ -121,4 +121,25 @@ func TestRemoveRootWhileItIsBeingScanned(t *testing.T) {
 		t.Fatalf("RemoveRoot during its scan: err = %v, want ErrScanRunning", err)
 	}
 	e.Wait()
+}
+
+// A folder that was deleted, or whose drive is disconnected, stays in the
+// catalog with its last scan; the UI offers to remove it.
+func TestListRootsTellsWhichFoldersAreUnavailable(t *testing.T) {
+	e := newEngine(t)
+	gone := filepath.Join(t.TempDir(), "gone")
+	os.Mkdir(gone, 0o755)
+	here := t.TempDir()
+	e.AddRoot(gone, "")
+	e.AddRoot(here, "")
+	os.Remove(gone)
+
+	roots, err := e.ListRoots()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roots[0].Available || !roots[1].Available {
+		t.Fatalf("available = %v, %v; want false for the deleted folder, true for the other",
+			roots[0].Available, roots[1].Available)
+	}
 }

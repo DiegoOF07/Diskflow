@@ -142,6 +142,7 @@ type RootInfo struct {
 	Name      string    `json:"name"` // the user's name for it, or the folder's own name
 	Path      string    `json:"path"`
 	CreatedAt int64     `json:"createdAt"`
-	Index     *ScanInfo `json:"index"` // latest completed scan, the one the explorer shows; nil if none
-	Last      *ScanInfo `json:"last"`  // latest attempt, whatever its status; nil if never scanned
+	Available bool      `json:"available"` // false if the folder is gone or its drive is disconnected
+	Index     *ScanInfo `json:"index"`     // latest completed scan, the one the explorer shows; nil if none
+	Last      *ScanInfo `json:"last"`      // latest attempt, whatever its status; nil if never scanned
 }

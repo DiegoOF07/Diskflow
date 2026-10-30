@@ -18,11 +18,13 @@ import (
 )
 
 var (
-	ErrScanRunning = errors.New("engine: a scan is already running")
-	ErrNoScan      = errors.New("engine: no completed scan for this root")
-	ErrClosed      = errors.New("engine: closed")
-	ErrNotDir      = scan.ErrNotDir // re-exported so callers only import engine
-	ErrBadSort     = store.ErrBadSort
+	// ErrRootUnavailable means the folder is gone or its drive is disconnected.
+	ErrRootUnavailable = errors.New("engine: folder not available")
+	ErrScanRunning     = errors.New("engine: a scan is already running")
+	ErrNoScan          = errors.New("engine: no completed scan for this root")
+	ErrClosed          = errors.New("engine: closed")
+	ErrNotDir          = scan.ErrNotDir // re-exported so callers only import engine
+	ErrBadSort         = store.ErrBadSort
 )
 
 // ProgressInterval is the minimum time between two OnProgress calls.
@@ -137,12 +139,8 @@ func (e *Engine) StartScan(root string, cb Callbacks) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	info, err := os.Stat(root)
-	if err != nil {
-		return 0, fmt.Errorf("engine: %w", err)
-	}
-	if !info.IsDir() {
-		return 0, fmt.Errorf("%w: %s", ErrNotDir, root)
+	if err := checkDir(root); err != nil {
+		return 0, err
 	}
 
 	e.mu.Lock()
@@ -288,6 +286,26 @@ func (e *Engine) Search(root, q string, limit int) (model.SearchResult, error) {
 	if err != nil {
 		return model.SearchResult{}, err
 	}
+	return e.withDirs(ctx, scanID, res)
+}
+
+// Unreadable returns up to limit entries of the active index of root that the
+// scan could not read, each with the path of its folder.
+func (e *Engine) Unreadable(root string, limit int) (model.SearchResult, error) {
+	ctx := context.Background()
+	scanID, err := e.activeScan(root)
+	if err != nil {
+		return model.SearchResult{}, err
+	}
+	res, err := e.st.Unreadable(ctx, scanID, limit)
+	if err != nil {
+		return model.SearchResult{}, err
+	}
+	return e.withDirs(ctx, scanID, res)
+}
+
+// withDirs fills the Dir of each hit.
+func (e *Engine) withDirs(ctx context.Context, scanID int64, res model.SearchResult) (model.SearchResult, error) {
 	dirs := map[int64]string{} // hits often share a folder
 	for i, h := range res.Hits {
 		dir, ok := dirs[h.ParentID]

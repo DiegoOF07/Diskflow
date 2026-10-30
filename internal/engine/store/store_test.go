@@ -89,8 +89,8 @@ func TestOpenEnablesWALAndMigratesOnce(t *testing.T) {
 	defer s2.Close()
 	var version int
 	s2.db.QueryRow("PRAGMA user_version").Scan(&version)
-	if version != 4 {
-		t.Fatalf("user_version = %d, want 4", version)
+	if version != 5 {
+		t.Fatalf("user_version = %d, want 5", version)
 	}
 }
 
@@ -710,5 +710,71 @@ func TestReadsDoNotWaitForAWrite(t *testing.T) {
 	}
 	if _, ok, err := s.ActiveScan(c, "/r"); !ok || err != nil {
 		t.Fatalf("ActiveScan during a write = %v, %v", ok, err)
+	}
+}
+
+func unreadableScan(t *testing.T, s *Store, root string) int64 {
+	t.Helper()
+	id, _ := s.BeginScan(ctx, root)
+	err := s.InsertEntries(ctx, id, []model.Entry{
+		{ID: 1, Name: root, Kind: model.KindDir},
+		{ID: 2, ParentID: 1, Name: "locked", Kind: model.KindDir, Err: model.ErrAccessDenied},
+		{ID: 3, ParentID: 1, Name: "ok", Kind: model.KindDir},
+		{ID: 4, ParentID: 3, Name: "gone.txt", Kind: model.KindFile, Err: model.ErrNotFound},
+		{ID: 5, ParentID: 3, Name: "fine.txt", Kind: model.KindFile},
+		{ID: 6, ParentID: 3, Name: "odd", Kind: model.KindDir, Err: model.ErrOther},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinishScan(ctx, id, model.StatusCompleted, model.Progress{Errors: 3}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestUnreadableListsEntriesWithErrors(t *testing.T) {
+	s, _ := openTemp(t)
+	id := unreadableScan(t, s, "/r")
+	completeScan(t, s, "/other") // its entries have no errors and must not leak in
+
+	res, err := s.Unreadable(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"locked", "gone.txt", "odd"}; !slices.Equal(hitNames(res), want) || res.More {
+		t.Fatalf("Unreadable = %q (more %v), want %q", hitNames(res), res.More, want)
+	}
+	if h := res.Hits[1]; h.ParentID != 3 || h.Err != model.ErrNotFound {
+		t.Fatalf("hit = %+v, want gone.txt inside ok with not_found", h)
+	}
+
+	res, _ = s.Unreadable(ctx, id, 2)
+	if len(res.Hits) != 2 || !res.More {
+		t.Fatalf("limit 2: %d hits (more %v), want 2 and more", len(res.Hits), res.More)
+	}
+}
+
+// The list is opened on demand on indexes of millions of entries, where only a
+// few have errors: it must read them through the partial index.
+func TestUnreadableUsesItsIndex(t *testing.T) {
+	s, _ := openTemp(t)
+	id := unreadableScan(t, s, "/r")
+	rows, err := s.rd.Query("EXPLAIN QUERY PLAN "+unreadableQuery, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var a, b, c int
+		var detail string
+		if err := rows.Scan(&a, &b, &c, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if !slices.ContainsFunc(plan, func(d string) bool { return strings.Contains(d, "entries_unreadable") }) {
+		t.Fatalf("plan = %q, want it to use entries_unreadable", plan)
 	}
 }

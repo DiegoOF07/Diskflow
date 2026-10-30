@@ -1,5 +1,6 @@
 import { effectScope } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { BackendError } from '../../backend/errors'
 import { dir, FakeBackend, file } from '../../backend/fake'
 import type { Summary } from '../../backend/types'
 import { COPIED_MS, PAGE_SIZE, useExplorer } from './useExplorer'
@@ -100,13 +101,26 @@ describe('scan', () => {
     expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT, 'src'])
   })
 
-  it('shows the error when the scan cannot start', async () => {
-    backend.failStart = 'engine: a scan is already running'
+  it('explains why the scan cannot start', async () => {
+    backend.failStart = new BackendError('scan_running', 'engine: a scan is already running')
     const ex = setup()
     await ex.ready
     await ex.scan()
     expect(ex.scanning.value).toBe(false)
-    expect(ex.error.value).toBe('engine: a scan is already running')
+    expect(ex.error.value).toMatch(/análisis en curso/)
+    expect(ex.errorCode.value).toBe('scan_running')
+  })
+
+  it('tells when the folder is not there to scan', async () => {
+    backend.failStart = new BackendError('root_unavailable', 'engine: folder not available')
+    const ex = setup()
+    await ex.ready
+    await ex.scan()
+    expect(ex.errorCode.value).toBe('root_unavailable')
+    expect(ex.trail.value.map((n) => n.name)).toEqual([ROOT]) // the last index is still shown
+    backend.failStart = null
+    await ex.scan()
+    expect(ex.errorCode.value).toBe(null)
   })
 })
 
