@@ -35,11 +35,12 @@ type App struct {
 	showFile     func(path string) error     // selects path in Explorer; replaced in tests
 	copyText     func(text string) error     // the clipboard; replaced in tests
 	open         func() (*engine.Engine, error)
-	ready        chan struct{} // closed when startup has finished; nil in tests that build App directly
+	show         func(ctx context.Context) // sizes and shows the hidden window; replaced in tests
+	ready        chan struct{}             // closed when startup has finished; nil in tests that build App directly
 }
 
 func NewApp() *App {
-	return &App{open: openEngine, ready: make(chan struct{})}
+	return &App{open: openEngine, show: showFitted, ready: make(chan struct{})}
 }
 
 // startup runs in its own goroutine while the page loads (Wails on Windows),
@@ -47,6 +48,7 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	defer close(a.ready)
 	a.ctx = ctx
+	a.show(ctx) // before opening the database, which can take seconds
 	a.emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
 	a.chooseFolder = func() (string, error) {
 		return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: "Carpeta a analizar"})

@@ -7,12 +7,17 @@
 
 DiskFlow is a visual storage auditor for development workspaces. Point it at a folder and it shows where the space goes (projects, dependencies, build artifacts) through a treemap and a sortable table, **without ever modifying your files**.
 
-> **Status:** early development (`v0.1`). Windows 10/11 x64 only for now. The user interface is in Spanish.
+> **Status:** early development (`v0.2`). Windows 10/11 x64 only for now. The user interface is in Spanish.
 
 ## Features
 
+- **Saved folders.** The home screen lists the folders you analyze, with their size and how long ago they were scanned. You can rename them or remove them from the list without touching their files.
+- **Real disk usage.** Sizes are what files take on disk, so sparse files (such as virtual disk images), NTFS-compressed files and cloud-only OneDrive files no longer inflate the totals. The logical size is shown alongside when it differs.
 - **Fast concurrent scanning** with live progress and cancellation. The engine indexed ~100k entries in about 2.4 s on NTFS while using under 10 MB of heap.
-- **Treemap and table side by side.** Hovering in one highlights the item in the other, and you can drill down into any folder.
+- **Treemap and table side by side.** Hovering in one highlights the item in the other, and you can drill down into any folder. The table sorts by size, name or date, loads large folders page by page and works from the keyboard.
+- **Search by name** across the whole index, biggest results first; picking a result opens its folder.
+- **Show in Explorer and Copy path** from each row or its context menu.
+- **Partial coverage made visible.** Folders that could not be read are listed with the reason, so you know what the totals leave out. If a scan fails or a folder's drive is disconnected, the previous scan stays available.
 - **Local index.** Results are stored in SQLite, so you can browse the last scan without rescanning.
 - **Read-only by design.** DiskFlow never deletes, moves or opens your files, and it makes no network requests.
 
@@ -44,13 +49,15 @@ The scan index is stored in `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
 
 ## Known limitations
 
-- **Sizes are logical, not on-disk.** Sparse, compressed and cloud-only (OneDrive) files are counted at their full logical size, so totals can exceed the real disk usage. On-disk size is planned for `v0.2`.
+- **Hard links are counted once per link.** Folders such as `C:\Windows\WinSxS` can therefore look bigger than the space they really take.
+- Only one folder can be scanned at a time.
+- The interface is designed for desktop-sized windows and is not yet adapted to small screens.
 - Only Windows is supported for now.
 
 ## Roadmap
 
-- **v0.2:** on-disk sizes, saved folders, search, "Show in Explorer" and "Copy path", and clearer error states.
-- **Later:** user-defined exclusions, file-type categories and export to JSON/CSV.
+- **v0.3 (project auditor):** detect projects (Node, Go, Python, Rust…), classify space into categories such as dependencies and build artifacts, and edit exclusions.
+- **Later:** scan history and comparisons, export to JSON/CSV, a refreshed design that adapts to smaller screens, and a signed installer.
 
 ## Building from source
 

@@ -230,6 +230,7 @@ func TestActionsUseTheResolvedPath(t *testing.T) {
 func TestCallsWaitForStartup(t *testing.T) {
 	release := make(chan struct{})
 	a := NewApp()
+	a.show = func(context.Context) {} // the Wails runtime needs a real window
 	a.open = func() (*engine.Engine, error) {
 		<-release
 		return engine.New(filepath.Join(t.TempDir(), "diskflow.db"), engine.Options{})
