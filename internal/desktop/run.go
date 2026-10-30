@@ -16,10 +16,11 @@ func Run(assets fs.FS) error {
 func appOptions(app *App, assets fs.FS) *options.App {
 	return &options.App{
 		Title:            "DiskFlow",
-		Width:            1200,
-		Height:           800,
-		MinWidth:         800,
-		MinHeight:        560,
+		Width:            prefWidth,
+		Height:           prefHeight,
+		MinWidth:         minWidth,
+		MinHeight:        minHeight,
+		StartHidden:      true, // shown by startup once it fits the screen
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 		OnStartup:        app.startup,

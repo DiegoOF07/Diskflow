@@ -7,12 +7,17 @@
 
 DiskFlow es un auditor visual de almacenamiento para espacios de trabajo de desarrollo. Eliges una carpeta y muestra en qué se va el espacio (proyectos, dependencias, artefactos de compilación) con un treemap y una tabla ordenable, **sin modificar nunca tus archivos**.
 
-> **Estado:** desarrollo temprano (`v0.1`). Por ahora solo para Windows 10/11 x64.
+> **Estado:** desarrollo temprano (`v0.2`). Por ahora solo para Windows 10/11 x64.
 
 ## Características
 
+- **Carpetas guardadas.** La pantalla de inicio lista las carpetas que analizas, con su tamaño y hace cuánto se analizaron. Puedes renombrarlas o quitarlas de la lista sin tocar sus archivos.
+- **Uso real del disco.** Los tamaños son lo que los archivos ocupan en disco, así que los archivos dispersos (como las imágenes de discos virtuales), los comprimidos con NTFS y los de OneDrive que solo están en la nube ya no inflan los totales. Cuando difiere, también se muestra el tamaño lógico.
 - **Escaneo concurrente rápido**, con progreso en vivo y cancelación. El motor indexó ~100k entradas en unos 2,4 s sobre NTFS, con menos de 10 MB de heap.
-- **Treemap y tabla lado a lado.** Al pasar el cursor por uno se resalta el elemento en el otro, y puedes entrar en cualquier carpeta.
+- **Treemap y tabla lado a lado.** Al pasar el cursor por uno se resalta el elemento en el otro, y puedes entrar en cualquier carpeta. La tabla ordena por tamaño, nombre o fecha, carga las carpetas grandes por páginas y se usa con el teclado.
+- **Búsqueda por nombre** en todo el índice, con los resultados más grandes primero; al elegir uno se abre su carpeta.
+- **Mostrar en el Explorador y Copiar ruta** desde cada fila o su menú contextual.
+- **Cobertura parcial a la vista.** Las carpetas que no se pudieron leer aparecen con el motivo, así sabes qué dejan fuera los totales. Si un escaneo falla o la unidad de una carpeta está desconectada, el escaneo anterior sigue disponible.
 - **Índice local.** Los resultados se guardan en SQLite, así que puedes explorar el último escaneo sin repetirlo.
 - **Solo lectura por diseño.** DiskFlow nunca borra, mueve ni abre tus archivos, y no hace peticiones de red.
 
@@ -44,13 +49,15 @@ El índice de escaneos se guarda en `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
 
 ## Limitaciones conocidas
 
-- **Los tamaños son lógicos, no en disco.** Los archivos dispersos, comprimidos y los de OneDrive que solo están en la nube cuentan con su tamaño lógico completo, así que los totales pueden superar el uso real del disco. El tamaño en disco está previsto para `v0.2`.
+- **Los hard links se cuentan una vez por enlace.** Por eso carpetas como `C:\Windows\WinSxS` pueden parecer más grandes que el espacio que ocupan de verdad.
+- Solo se puede analizar una carpeta a la vez.
+- La interfaz está pensada para ventanas de escritorio y aún no se adapta a pantallas pequeñas.
 - Por ahora solo se admite Windows.
 
 ## Hoja de ruta
 
-- **v0.2:** tamaños en disco, carpetas guardadas, búsqueda, "Mostrar en el Explorador" y "Copiar ruta", y estados de error más claros.
-- **Más adelante:** exclusiones definidas por el usuario, categorías por tipo de archivo y exportación a JSON/CSV.
+- **v0.3 (auditor de proyectos):** detectar proyectos (Node, Go, Python, Rust…), clasificar el espacio en categorías como dependencias y artefactos de compilación, y editar exclusiones.
+- **Más adelante:** historial de escaneos y comparaciones, exportación a JSON/CSV, un diseño renovado que se adapte a pantallas más pequeñas e instalador firmado.
 
 ## Compilar desde el código
 
