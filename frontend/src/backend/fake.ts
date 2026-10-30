@@ -1,4 +1,15 @@
-import type { Backend, Hit, ListQuery, Node, Page, Progress, RootInfo, SearchResult, Summary } from './types'
+import type {
+  Backend,
+  Hit,
+  ListQuery,
+  Node,
+  Page,
+  Progress,
+  RootInfo,
+  ScanState,
+  SearchResult,
+  Summary,
+} from './types'
 
 /**
  * In-memory Backend for tests. children() and listChildren() answer immediately
@@ -9,6 +20,8 @@ export class FakeBackend implements Backend {
   picked: string | null = null // folder the dialog returns
   catalog: RootInfo[] = []
   failRemove: string | null = null
+  removeCalls = 0
+  scanStates = new Map<string, ScanState>()
   roots = new Map<string, Node>()
   kids = new Map<number, Node[]>()
   failStart: string | null = null
@@ -53,9 +66,10 @@ export class FakeBackend implements Backend {
     )
   }
   async removeRoot(id: number) {
+    this.removeCalls++
+    await this.gate(`remove:${id}`)
     if (this.failRemove) throw this.failRemove
-    await this.getRoot(id)
-    this.catalog = this.catalog.filter((c) => c.id !== id)
+    this.catalog = this.catalog.filter((c) => c.id !== id) // already gone is fine, like the engine
   }
   async startScan(root: string) {
     if (this.failStart) throw this.failStart // Wails rejects with the Go error string
@@ -63,6 +77,9 @@ export class FakeBackend implements Backend {
   }
   async cancelScan() {
     this.cancelled++
+  }
+  async scanState(root: string) {
+    return this.scanStates.get(root) ?? ''
   }
   async root(root: string) {
     return this.roots.get(root) ?? null
@@ -146,7 +163,7 @@ export class FakeBackend implements Backend {
     return () => this.doneCbs.delete(cb)
   }
 
-  /** Holds the requests for a parent id, or the searches for a query. */
+  /** Holds the requests for a parent id, the searches for a query, or `remove:<id>`. */
   hold(key: number | string) {
     this.holding.add(key)
   }

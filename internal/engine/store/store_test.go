@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
 )
@@ -88,8 +89,8 @@ func TestOpenEnablesWALAndMigratesOnce(t *testing.T) {
 	defer s2.Close()
 	var version int
 	s2.db.QueryRow("PRAGMA user_version").Scan(&version)
-	if version != 3 {
-		t.Fatalf("user_version = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("user_version = %d, want 4", version)
 	}
 }
 
@@ -679,5 +680,35 @@ func TestSearchStopsWhenCancelled(t *testing.T) {
 	cancel()
 	if _, err := s.Search(c, id, "report", 10); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+// The UI reads while scans and Prune write. With WAL a read needs no lock, as
+// long as it does not wait for the writer's connection.
+func TestReadsDoNotWaitForAWrite(t *testing.T) {
+	s, _ := openTemp(t)
+	completeScan(t, s, "/r")
+	s.AddRoot(ctx, "/r", "/r", "")
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("INSERT INTO roots (path, root_key, created_at) VALUES ('/new', '/new', 0)"); err != nil {
+		t.Fatal(err)
+	}
+
+	c, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	roots, err := s.ListRoots(c)
+	if err != nil {
+		t.Fatalf("ListRoots during a write: %v", err)
+	}
+	if len(roots) != 1 {
+		t.Fatalf("ListRoots = %d roots, want 1: the write is not committed", len(roots))
+	}
+	if _, ok, err := s.ActiveScan(c, "/r"); !ok || err != nil {
+		t.Fatalf("ActiveScan during a write = %v, %v", ok, err)
 	}
 }

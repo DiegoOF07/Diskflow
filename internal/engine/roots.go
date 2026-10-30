@@ -67,12 +67,16 @@ func (e *Engine) RenameRoot(id int64, name string) error {
 	return rootErr(e.st.RenameRoot(context.Background(), id, strings.TrimSpace(name)))
 }
 
-// RemoveRoot takes a folder out of the catalog and deletes its scans from
-// the database. The folder itself is never touched.
+// RemoveRoot takes a folder out of the catalog at once; its scans are deleted
+// from the database in the background. The folder itself is never touched.
+// Removing a folder that is already gone succeeds: the user gets what they asked.
 func (e *Engine) RemoveRoot(id int64) error {
 	row, err := e.st.GetRoot(context.Background(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
 	if err != nil {
-		return rootErr(err)
+		return err
 	}
 	// Holding mu also keeps a new scan of this folder from starting meanwhile.
 	e.mu.Lock()
@@ -80,7 +84,15 @@ func (e *Engine) RemoveRoot(id int64) error {
 	if e.cancel != nil && e.running == row.Key {
 		return ErrScanRunning
 	}
-	return rootErr(e.st.RemoveRoot(context.Background(), id))
+	err = e.st.RemoveRoot(context.Background(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil // removed by a concurrent call
+	}
+	if err != nil {
+		return err
+	}
+	e.requestPrune()
+	return nil
 }
 
 func (e *Engine) rootInfo(row store.RootRow) (model.RootInfo, error) {

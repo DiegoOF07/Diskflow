@@ -53,7 +53,9 @@ func TestRenameRoot(t *testing.T) {
 	}
 }
 
-func TestRemoveRootDeletesOnlyItsScans(t *testing.T) {
+// RemoveRoot only marks the scans: deleting millions of entries would keep the
+// user waiting. Prune deletes them later, scan_runs rows included.
+func TestRemoveRootLeavesItsScansToPrune(t *testing.T) {
 	s, _ := openTemp(t)
 	gone := completeScan(t, s, "/r")
 	kept := completeScan(t, s, "/other")
@@ -66,19 +68,53 @@ func TestRemoveRootDeletesOnlyItsScans(t *testing.T) {
 	if _, err := s.GetRoot(ctx, id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("GetRoot after remove: err = %v, want ErrNotFound", err)
 	}
+	if _, ok, _ := s.ActiveScan(ctx, "/r"); ok {
+		t.Fatal("a removed root still has an active scan")
+	}
+	if got, _ := s.LatestScan(ctx, "/r", false); got != nil {
+		t.Fatalf("LatestScan of a removed root = %+v, want nil", got)
+	}
+	if n := countEntries(t, s, gone); n != 3 {
+		t.Fatalf("RemoveRoot deleted entries itself: %d left, want 3 until Prune", n)
+	}
+
+	if _, err := s.Prune(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if n := countEntries(t, s, gone); n != 0 {
-		t.Fatalf("removed root kept %d entries", n)
+		t.Fatalf("Prune kept %d entries of the removed root", n)
 	}
 	var runs int
 	s.db.QueryRow("SELECT COUNT(*) FROM scan_runs WHERE root = '/r'").Scan(&runs)
 	if runs != 0 {
-		t.Fatalf("removed root kept %d scan_runs rows", runs)
+		t.Fatalf("Prune kept %d scan_runs rows of the removed root", runs)
 	}
 	if n := countEntries(t, s, kept); n != 3 {
 		t.Fatalf("other root has %d entries, want 3", n)
 	}
 	if err := s.RemoveRoot(ctx, id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second RemoveRoot err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestReaddedRootStartsWithoutItsRemovedScans(t *testing.T) {
+	s, _ := openTemp(t)
+	completeScan(t, s, "/r")
+	id, _ := s.AddRoot(ctx, "/r", "/r", "")
+	if err := s.RemoveRoot(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	s.AddRoot(ctx, "/r", "/r", "") // before Prune ran
+	if _, ok, _ := s.ActiveScan(ctx, "/r"); ok {
+		t.Fatal("the removed index came back")
+	}
+	fresh := completeScan(t, s, "/r")
+	if active, ok, _ := s.ActiveScan(ctx, "/r"); !ok || active != fresh {
+		t.Fatalf("ActiveScan = %d, %v; want the new scan %d", active, ok, fresh)
+	}
+	s.Prune(ctx)
+	if n := countEntries(t, s, fresh); n != 3 {
+		t.Fatalf("Prune deleted the new scan: %d entries left", n)
 	}
 }
 

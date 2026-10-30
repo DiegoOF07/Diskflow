@@ -26,8 +26,8 @@ var sortColumns = map[string]string{
 
 // ActiveScan returns the most recent completed scan of root.
 func (s *Store) ActiveScan(ctx context.Context, root string) (id int64, ok bool, err error) {
-	err = s.db.QueryRowContext(ctx,
-		"SELECT id FROM scan_runs WHERE root = ? AND status = ? ORDER BY id DESC LIMIT 1",
+	err = s.rd.QueryRowContext(ctx,
+		"SELECT id FROM scan_runs WHERE root = ? AND status = ? AND removed = 0 ORDER BY id DESC LIMIT 1",
 		root, model.StatusCompleted).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
@@ -40,7 +40,7 @@ func (s *Store) ActiveScan(ctx context.Context, root string) (id int64, ok bool,
 
 // Root returns the root entry (id 1) of a scan.
 func (s *Store) Root(ctx context.Context, scanID int64) (model.Node, error) {
-	row := s.db.QueryRowContext(ctx,
+	row := s.rd.QueryRowContext(ctx,
 		"SELECT "+nodeColumns+" FROM entries WHERE scan_id = ? AND id = 1", scanID)
 	n, err := scanNode(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -77,7 +77,7 @@ func (s *Store) ListChildren(ctx context.Context, scanID, parentID int64, q mode
 		return model.Page{}, err
 	}
 	page := model.Page{Items: items}
-	if err := s.db.QueryRowContext(ctx,
+	if err := s.rd.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM entries WHERE scan_id = ? AND parent_id = ?", scanID, parentID).Scan(&page.Total); err != nil {
 		return model.Page{}, fmt.Errorf("store: list children: %w", err)
 	}
@@ -100,7 +100,7 @@ func (s *Store) Search(ctx context.Context, scanID int64, q string, limit int) (
 	}
 	limit = clampLimit(limit)
 	// One extra row tells whether there are more hits than the limit.
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.rd.QueryContext(ctx,
 		"SELECT "+nodeColumns+", parent_id FROM entries WHERE scan_id = ? AND id <> 1 AND name LIKE ? ESCAPE '\\' ORDER BY disk_size DESC, id LIMIT ?",
 		scanID, "%"+likeEscaper.Replace(q)+"%", limit+1)
 	if err != nil {
@@ -184,7 +184,7 @@ func scanNode(r rowScanner, extra ...any) (model.Node, error) {
 }
 
 func (s *Store) queryNodes(ctx context.Context, what, query string, args ...any) ([]model.Node, error) {
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.rd.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: %s: %w", what, err)
 	}

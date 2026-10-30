@@ -140,6 +140,16 @@ func (a *App) StartScan(root string) error {
 	return err
 }
 
+// ScanState tells whether root is being scanned: "" (no), "running" or
+// "saving". A view opened during a scan uses it to show the scan in progress.
+func (a *App) ScanState(root string) (string, error) {
+	eng, err := a.engine()
+	if err != nil {
+		return "", err
+	}
+	return eng.ScanState(root)
+}
+
 func (a *App) CancelScan() {
 	if a.eng != nil {
 		a.eng.Cancel()

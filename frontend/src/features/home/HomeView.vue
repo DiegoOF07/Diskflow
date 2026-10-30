@@ -7,7 +7,7 @@ import { formatBytes } from '../explorer/format'
 import { rootStatus } from './status'
 import { useRoots } from './useRoots'
 
-const { roots, loaded, error, load, add, rename, remove } = useRoots(useBackend())
+const { roots, loaded, removing, error, load, add, rename, remove } = useRoots(useBackend())
 const router = useRouter()
 void load()
 
@@ -39,9 +39,10 @@ async function saveRename(id: number) {
   await rename(id, draft.value)
 }
 
+// The confirmation stays, showing "Quitando…", until the folder is gone.
 async function confirmRemove(id: number) {
-  confirming.value = null
   await remove(id)
+  if (confirming.value === id) confirming.value = null
 }
 </script>
 
@@ -53,6 +54,8 @@ async function confirmRemove(id: number) {
     </header>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+    <p v-if="!loaded && !error" class="loading" aria-live="polite">Cargando carpetas…</p>
 
     <div v-if="loaded && !roots.length" class="first-run">
       <p>Agrega una carpeta para ver en qué se va su espacio.</p>
@@ -84,7 +87,14 @@ async function confirmRemove(id: number) {
 
         <div v-if="confirming === r.id" class="actions confirm" role="group" aria-label="Confirmar">
           <span>¿Quitar del catálogo? Se borra su análisis, no sus archivos.</span>
-          <button type="button" class="danger" @click="confirmRemove(r.id)">Quitar</button>
+          <button
+            type="button"
+            class="danger"
+            :disabled="removing.includes(r.id)"
+            @click="confirmRemove(r.id)"
+          >
+            {{ removing.includes(r.id) ? 'Quitando…' : 'Quitar' }}
+          </button>
           <button type="button" @click="confirming = null">No</button>
         </div>
         <div v-else class="actions">
@@ -102,6 +112,9 @@ async function confirmRemove(id: number) {
 .home {
   padding: 16px 20px;
   max-width: 1100px;
+}
+.loading {
+  color: var(--muted);
 }
 .toolbar {
   display: flex;

@@ -106,8 +106,8 @@ func TestRemoveRootKeepsTheFolder(t *testing.T) {
 	if _, err := e.Root(dir); !errors.Is(err, ErrNoScan) {
 		t.Fatalf("Root after remove: err = %v, want ErrNoScan", err)
 	}
-	if err := e.RemoveRoot(r.ID); !errors.Is(err, ErrRootNotFound) {
-		t.Fatalf("second RemoveRoot err = %v, want ErrRootNotFound", err)
+	if err := e.RemoveRoot(r.ID); err != nil {
+		t.Fatalf("second RemoveRoot err = %v, want nil: removing is idempotent", err)
 	}
 }
 

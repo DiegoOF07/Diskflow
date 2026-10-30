@@ -46,6 +46,10 @@ export function Root(arg1) {
   return window['go']['desktop']['App']['Root'](arg1);
 }
 
+export function ScanState(arg1) {
+  return window['go']['desktop']['App']['ScanState'](arg1);
+}
+
 export function Search(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['Search'](arg1, arg2, arg3);
 }

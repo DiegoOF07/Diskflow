@@ -54,6 +54,7 @@ type Engine struct {
 	mu      sync.Mutex
 	cancel  context.CancelFunc // non-nil while a scan runs
 	running string             // root key of the running scan
+	saving  bool               // the running scan is past OnSaving
 	done    chan struct{}      // closed when the current scan has finished
 	closed  bool
 
@@ -159,6 +160,7 @@ func (e *Engine) StartScan(root string, cb Callbacks) (int64, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
 	e.running = key
+	e.saving = false
 	e.done = make(chan struct{})
 	go e.run(ctx, id, root, withDefaults(cb))
 	return id, nil
@@ -183,6 +185,32 @@ func (e *Engine) Cancel() {
 	defer e.mu.Unlock()
 	if e.cancel != nil {
 		e.cancel()
+	}
+}
+
+// Scan states reported by ScanState.
+const (
+	ScanIdle    = ""
+	ScanRunning = "running"
+	ScanSaving  = "saving" // the walk is over; the scan can no longer be cancelled
+)
+
+// ScanState tells whether root is being scanned, so a view opened during the
+// scan can show it instead of offering to start another one.
+func (e *Engine) ScanState(root string) (string, error) {
+	key, err := rootKey(root, caseInsensitiveFS)
+	if err != nil {
+		return "", err
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	switch {
+	case e.cancel == nil || e.running != key:
+		return ScanIdle, nil
+	case e.saving:
+		return ScanSaving, nil
+	default:
+		return ScanRunning, nil
 	}
 }
 
