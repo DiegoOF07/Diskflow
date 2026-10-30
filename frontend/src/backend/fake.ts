@@ -10,6 +10,12 @@ import type {
   SearchResult,
   Summary,
 } from './types'
+import { BackendError } from './errors'
+
+/** A fail* field: a code with its detail, or just the detail of a generic error. */
+type Failure = BackendError | string | null
+
+const failure = (f: BackendError | string) => (typeof f === 'string' ? new BackendError('error', f) : f)
 
 /**
  * In-memory Backend for tests. children() and listChildren() answer immediately
@@ -19,21 +25,24 @@ import type {
 export class FakeBackend implements Backend {
   picked: string | null = null // folder the dialog returns
   catalog: RootInfo[] = []
-  failRemove: string | null = null
+  failList: Failure = null
+  failRemove: Failure = null
   removeCalls = 0
   scanStates = new Map<string, ScanState>()
   roots = new Map<string, Node>()
   kids = new Map<number, Node[]>()
-  failStart: string | null = null
-  failChildren: string | null = null
-  failSearch: string | null = null
+  failStart: Failure = null
+  failChildren: Failure = null
+  failSearch: Failure = null
   searches: string[] = []
   started: string[] = []
   cancelled = 0
   searchesCancelled = 0
   shown: number[] = [] // ids passed to showInExplorer
   copied: number[] = [] // ids passed to copyPath
-  failAction: string | null = null
+  failAction: Failure = null
+  unreadableHits: Hit[] = []
+  unreadableCalls = 0
 
   private progressCbs = new Set<(p: Progress) => void>()
   private savingCbs = new Set<() => void>()
@@ -52,11 +61,12 @@ export class FakeBackend implements Backend {
     return { ...r }
   }
   async listRoots() {
+    if (this.failList) throw failure(this.failList)
     return this.catalog.map((r) => ({ ...r }))
   }
   async getRoot(id: number) {
     const r = this.catalog.find((c) => c.id === id)
-    if (!r) throw 'engine: folder not in the catalog'
+    if (!r) throw new BackendError('not_found', 'engine: folder not in the catalog')
     return { ...r }
   }
   async renameRoot(id: number, name: string) {
@@ -68,11 +78,11 @@ export class FakeBackend implements Backend {
   async removeRoot(id: number) {
     this.removeCalls++
     await this.gate(`remove:${id}`)
-    if (this.failRemove) throw this.failRemove
+    if (this.failRemove) throw failure(this.failRemove)
     this.catalog = this.catalog.filter((c) => c.id !== id) // already gone is fine, like the engine
   }
   async startScan(root: string) {
-    if (this.failStart) throw this.failStart // Wails rejects with the Go error string
+    if (this.failStart) throw failure(this.failStart)
     this.started.push(root)
   }
   async cancelScan() {
@@ -106,7 +116,7 @@ export class FakeBackend implements Backend {
   async search(root: string, q: string, limit: number): Promise<SearchResult> {
     this.searches.push(q)
     await this.gate(q)
-    if (this.failSearch) throw this.failSearch
+    if (this.failSearch) throw failure(this.failSearch)
     const needle = q.toLowerCase()
     const hits: Hit[] = []
     for (const [parentId, kids] of this.kids) {
@@ -123,12 +133,17 @@ export class FakeBackend implements Backend {
     this.searchesCancelled++
   }
   async showInExplorer(_root: string, id: number) {
-    if (this.failAction) throw this.failAction
+    if (this.failAction) throw failure(this.failAction)
     this.shown.push(id)
   }
   async copyPath(_root: string, id: number) {
-    if (this.failAction) throw this.failAction
+    if (this.failAction) throw failure(this.failAction)
     this.copied.push(id)
+  }
+  async unreadable(_root: string, limit: number): Promise<SearchResult> {
+    this.unreadableCalls++
+    await this.gate('unreadable')
+    return { hits: this.unreadableHits.slice(0, limit), more: this.unreadableHits.length > limit }
   }
   async trail(root: string, id: number) {
     const top = this.roots.get(root)
@@ -143,7 +158,7 @@ export class FakeBackend implements Backend {
   }
   private async kidsOf(parentId: number) {
     await this.gate(parentId)
-    if (this.failChildren) throw this.failChildren
+    if (this.failChildren) throw failure(this.failChildren)
     return this.kids.get(parentId) ?? []
   }
   private async gate(key: number | string) {
@@ -163,7 +178,7 @@ export class FakeBackend implements Backend {
     return () => this.doneCbs.delete(cb)
   }
 
-  /** Holds the requests for a parent id, the searches for a query, or `remove:<id>`. */
+  /** Holds the requests for a parent id, the searches for a query, `remove:<id>` or 'unreadable'. */
   hold(key: number | string) {
     this.holding.add(key)
   }
@@ -216,6 +231,7 @@ export const rootInfo = (id: number, path: string, name = baseName(path)): RootI
   name,
   path,
   createdAt: 0,
+  available: true,
   index: null,
   last: null,
 })

@@ -7,7 +7,7 @@ import { formatBytes } from '../explorer/format'
 import { rootStatus } from './status'
 import { useRoots } from './useRoots'
 
-const { roots, loaded, removing, error, load, add, rename, remove } = useRoots(useBackend())
+const { roots, loaded, loading, removing, error, load, add, rename, remove } = useRoots(useBackend())
 const router = useRouter()
 void load()
 
@@ -55,7 +55,11 @@ async function confirmRemove(id: number) {
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <p v-if="!loaded && !error" class="loading" aria-live="polite">Cargando carpetas…</p>
+    <p v-if="!loaded && loading" class="loading" aria-live="polite">Cargando carpetas…</p>
+    <p v-else-if="!loaded" class="loading">
+      No se pudo cargar la lista de carpetas.
+      <button type="button" @click="load">Reintentar</button>
+    </p>
 
     <div v-if="loaded && !roots.length" class="first-run">
       <p>Agrega una carpeta para ver en qué se va su espacio.</p>
@@ -78,7 +82,15 @@ async function confirmRemove(id: number) {
           />
           <button v-else type="button" class="link name" @click="open(r)">{{ r.name }}</button>
           <code class="path" :title="r.path">{{ r.path }}</code>
-          <span class="status">{{ rootStatus(r) }}</span>
+          <span class="status">
+            <span
+              v-if="!r.available"
+              class="badge"
+              title="No se encuentra la carpeta: puede que se haya movido o borrado, o que su unidad esté desconectada. Si ya no existe, quítala."
+              >no disponible</span
+            >
+            {{ rootStatus(r) }}
+          </span>
         </div>
 
         <span class="size" :title="r.index ? `${formatBytes(r.index.bytes)} lógicos` : undefined">
@@ -193,6 +205,15 @@ h1 {
   color: var(--muted);
   font-size: 12px;
   max-width: 220px;
+}
+.badge {
+  margin-right: 6px;
+  font-size: 11px;
+  color: var(--danger);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 4px;
+  cursor: help;
 }
 button.danger {
   border-color: var(--danger);

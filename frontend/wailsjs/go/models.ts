@@ -143,6 +143,7 @@ export namespace model {
 	    name: string;
 	    path: string;
 	    createdAt: number;
+	    available: boolean;
 	    index?: ScanInfo;
 	    last?: ScanInfo;
 	
@@ -156,6 +157,7 @@ export namespace model {
 	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.createdAt = source["createdAt"];
+	        this.available = source["available"];
 	        this.index = this.convertValues(source["index"], ScanInfo);
 	        this.last = this.convertValues(source["last"], ScanInfo);
 	    }

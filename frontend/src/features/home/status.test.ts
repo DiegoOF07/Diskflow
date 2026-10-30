@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { rootInfo } from '../../backend/fake'
 import type { ScanInfo } from '../../backend/types'
-import { rootStatus } from './status'
+import { formatDate } from '../explorer/format'
+import { previousIndexNote, rootStatus } from './status'
 
 const NOW = 1_800_000_000
 const scan = (id: number, status: ScanInfo['status'], finishedAt = NOW - 3 * 3600): ScanInfo => ({
@@ -39,5 +40,23 @@ describe('rootStatus', () => {
   it('only attempts that did not complete', () => {
     expect(rootStatus(root(null, scan(2, 'failed')), NOW)).toBe('El análisis falló')
     expect(rootStatus(root(null, scan(2, 'cancelled')), NOW)).toBe('Análisis cancelado')
+  })
+})
+
+describe('previousIndexNote', () => {
+  it('says which index is shown after an attempt that did not complete', () => {
+    const index = scan(1, 'completed')
+    expect(previousIndexNote(root(index, scan(2, 'failed')))).toBe(
+      `El último análisis falló; se muestra el del ${formatDate(index.finishedAt)}.`,
+    )
+    expect(previousIndexNote(root(index, scan(2, 'cancelled')))).toBe(
+      `El último análisis se canceló; se muestra el del ${formatDate(index.finishedAt)}.`,
+    )
+  })
+  it('says nothing when the index is the latest attempt, one is running or there is no index', () => {
+    const index = scan(1, 'completed')
+    expect(previousIndexNote(root(index, index))).toBe('')
+    expect(previousIndexNote(root(index, scan(2, 'running', 0)))).toBe('')
+    expect(previousIndexNote(root(null, scan(2, 'failed')))).toBe('')
   })
 })

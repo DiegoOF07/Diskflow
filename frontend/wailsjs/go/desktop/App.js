@@ -65,3 +65,7 @@ export function StartScan(arg1) {
 export function Trail(arg1, arg2) {
   return window['go']['desktop']['App']['Trail'](arg1, arg2);
 }
+
+export function Unreadable(arg1, arg2) {
+  return window['go']['desktop']['App']['Unreadable'](arg1, arg2);
+}

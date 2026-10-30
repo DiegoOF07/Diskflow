@@ -1,5 +1,6 @@
 import { effectScope } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { BackendError } from '../../backend/errors'
 import { FakeBackend, rootInfo } from '../../backend/fake'
 import { useRoots } from './useRoots'
 
@@ -21,6 +22,27 @@ it('loads the catalog', async () => {
   await r.load()
   expect(r.roots.value.map((x) => x.name)).toEqual(['work', 'fotos'])
   expect(r.loaded.value).toBe(true)
+})
+
+it('explains why the catalog cannot be loaded', async () => {
+  backend.failList = new BackendError('db_unavailable', 'desktop: the index database is not available')
+  const r = setup()
+  await r.load()
+  expect(r.loaded.value).toBe(false)
+  expect(r.loading.value).toBe(false)
+  expect(r.error.value).toMatch(/No se pudo abrir el índice/)
+
+  backend.failList = null
+  await r.load()
+  expect(r.loaded.value).toBe(true)
+})
+
+it('is loading only while the catalog is requested', async () => {
+  const r = setup()
+  const pending = r.load()
+  expect(r.loading.value).toBe(true)
+  await pending
+  expect(r.loading.value).toBe(false)
 })
 
 describe('add', () => {

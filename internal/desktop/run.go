@@ -10,8 +10,11 @@ import (
 
 // Run opens the main window and blocks until it closes.
 func Run(assets fs.FS) error {
-	app := NewApp()
-	return wails.Run(&options.App{
+	return wails.Run(appOptions(NewApp(), assets))
+}
+
+func appOptions(app *App, assets fs.FS) *options.App {
+	return &options.App{
 		Title:            "DiskFlow",
 		Width:            1200,
 		Height:           800,
@@ -22,5 +25,12 @@ func Run(assets fs.FS) error {
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind:             []any{app},
-	})
+		ErrorFormatter:   formatError,
+		// A second window would write the same index; opening the app again
+		// brings the running one to the front instead.
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "com.github.diegoof07.diskflow",
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.focus() },
+		},
+	}
 }
