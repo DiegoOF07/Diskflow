@@ -55,6 +55,20 @@ describe('add', () => {
     expect(r.roots.value.map((x) => x.path)).toContain('E:\\juegos')
   })
 
+  it('ignores clicks while the dialog is open', async () => {
+    backend.picked = 'E:\\juegos'
+    backend.hold('pick')
+    const r = setup()
+    await r.load()
+    const first = r.add()
+    expect(r.adding.value).toBe(true)
+    expect(await r.add()).toBeNull()
+    backend.release('pick')
+    expect((await first)?.path).toBe('E:\\juegos')
+    expect(r.adding.value).toBe(false)
+    expect(backend.pickCalls).toBe(1)
+  })
+
   it('does nothing when the dialog is closed', async () => {
     const r = setup()
     await r.load()

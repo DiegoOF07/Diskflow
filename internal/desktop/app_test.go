@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,6 +158,38 @@ func TestPickFolderAddsItToTheCatalog(t *testing.T) {
 	roots, _ := a.ListRoots()
 	if len(roots) != 1 || roots[0].ID != r.ID {
 		t.Fatalf("ListRoots = %+v, want the picked folder", roots)
+	}
+}
+
+// Clicks queued while the app starts arrive together. A second dialog opened
+// from inside the first one's message loop can crash the app.
+func TestPickFolderOpensOneDialogAtATime(t *testing.T) {
+	a, _ := newTestApp(t)
+	dir := t.TempDir()
+	var dialogs atomic.Int32
+	opened, release := make(chan struct{}), make(chan struct{})
+	a.chooseFolder = func() (string, error) {
+		dialogs.Add(1)
+		opened <- struct{}{}
+		<-release
+		return dir, nil
+	}
+
+	first := make(chan error, 1)
+	go func() {
+		_, err := a.PickFolder()
+		first <- err
+	}()
+	<-opened
+	if r, err := a.PickFolder(); r != nil || err != nil {
+		t.Fatalf("second PickFolder = %+v, %v; want nil, nil while the dialog is open", r, err)
+	}
+	close(release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if n := dialogs.Load(); n != 1 {
+		t.Fatalf("%d dialogs opened, want 1", n)
 	}
 }
 

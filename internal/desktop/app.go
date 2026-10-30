@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/DiegoOF07/Diskflow/internal/engine"
 	"github.com/DiegoOF07/Diskflow/internal/engine/model"
@@ -37,6 +38,7 @@ type App struct {
 	open         func() (*engine.Engine, error)
 	show         func(ctx context.Context) // sizes and shows the hidden window; replaced in tests
 	ready        chan struct{}             // closed when startup has finished; nil in tests that build App directly
+	picking      atomic.Bool               // a folder dialog is open
 }
 
 func NewApp() *App {
@@ -48,7 +50,9 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	defer close(a.ready)
 	a.ctx = ctx
-	a.show(ctx) // before opening the database, which can take seconds
+	// The window waits for the UI thread and the database for the disk; neither
+	// needs the other, so the database does not wait behind the window.
+	go a.show(ctx)
 	a.emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
 	a.chooseFolder = func() (string, error) {
 		return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{Title: "Carpeta a analizar"})
@@ -103,12 +107,18 @@ func (a *App) engine() (*engine.Engine, error) {
 }
 
 // PickFolder opens the native folder dialog and adds the chosen folder to the
-// catalog. It returns nil if the user cancels.
+// catalog. It returns nil if the user cancels, or if a dialog is already open.
 func (a *App) PickFolder() (*model.RootInfo, error) {
 	eng, err := a.engine()
 	if err != nil {
 		return nil, err
 	}
+	// Clicks queued while the app starts arrive together, and Wails would open
+	// each dialog from inside the previous one's message loop.
+	if !a.picking.CompareAndSwap(false, true) {
+		return nil, nil
+	}
+	defer a.picking.Store(false)
 	path, err := a.chooseFolder()
 	if err != nil || path == "" {
 		return nil, err
