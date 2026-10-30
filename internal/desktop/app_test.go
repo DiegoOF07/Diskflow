@@ -69,6 +69,13 @@ func TestStartScanEmitsProgressSavingThenDone(t *testing.T) {
 	}
 }
 
+func TestScanStateIsIdleWithoutAScan(t *testing.T) {
+	a, _ := newTestApp(t)
+	if s, err := a.ScanState(t.TempDir()); s != "" || err != nil {
+		t.Fatalf("ScanState = %q, %v; want idle", s, err)
+	}
+}
+
 func TestRootIsNilBeforeTheFirstScan(t *testing.T) {
 	a, _ := newTestApp(t)
 	root, err := a.Root(t.TempDir())

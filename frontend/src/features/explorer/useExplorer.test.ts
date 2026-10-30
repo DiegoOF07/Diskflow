@@ -76,6 +76,16 @@ describe('scan', () => {
     expect(ex.children.value.map((n) => n.name)).toEqual(['src', 'a.txt'])
   })
 
+  it('shows a scan that was already running when the view opened', async () => {
+    backend.scanStates.set(ROOT, 'saving')
+    const ex = setup()
+    await ex.ready
+    expect(ex.scanning.value).toBe(true)
+    expect(ex.saving.value).toBe(true)
+    backend.emitDone(summary('completed'))
+    expect(ex.scanning.value).toBe(false)
+  })
+
   it('keeps the current view when the scan is cancelled', async () => {
     const ex = setup()
     await ex.ready

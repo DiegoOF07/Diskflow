@@ -44,7 +44,7 @@ func scanRoot(r rowScanner) (RootRow, error) {
 }
 
 func (s *Store) GetRoot(ctx context.Context, id int64) (RootRow, error) {
-	row, err := scanRoot(s.db.QueryRowContext(ctx, "SELECT "+rootColumns+" FROM roots WHERE id = ?", id))
+	row, err := scanRoot(s.rd.QueryRowContext(ctx, "SELECT "+rootColumns+" FROM roots WHERE id = ?", id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return RootRow{}, ErrNotFound
 	}
@@ -56,7 +56,7 @@ func (s *Store) GetRoot(ctx context.Context, id int64) (RootRow, error) {
 
 // ListRoots returns the catalog in the order folders were added.
 func (s *Store) ListRoots(ctx context.Context) ([]RootRow, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+rootColumns+" FROM roots ORDER BY created_at, id")
+	rows, err := s.rd.QueryContext(ctx, "SELECT "+rootColumns+" FROM roots ORDER BY created_at, id")
 	if err != nil {
 		return nil, fmt.Errorf("store: list roots: %w", err)
 	}
@@ -83,8 +83,8 @@ func (s *Store) RenameRoot(ctx context.Context, id int64, name string) error {
 	return mustAffect(res)
 }
 
-// RemoveRoot drops a folder from the catalog together with all its scans.
-// It only touches the database, never the folder.
+// RemoveRoot drops a folder from the catalog and hides its scans at once;
+// Prune deletes them later. It only touches the database, never the folder.
 func (s *Store) RemoveRoot(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		var key string
@@ -96,8 +96,7 @@ func (s *Store) RemoveRoot(ctx context.Context, id int64) error {
 			return fmt.Errorf("store: remove root: %w", err)
 		}
 		for _, q := range []string{
-			"DELETE FROM entries WHERE scan_id IN (SELECT id FROM scan_runs WHERE root = ?)",
-			"DELETE FROM scan_runs WHERE root = ?",
+			"UPDATE scan_runs SET removed = 1 WHERE root = ?",
 			"DELETE FROM roots WHERE root_key = ?",
 		} {
 			if _, err := tx.ExecContext(ctx, q, key); err != nil {
@@ -112,14 +111,14 @@ func (s *Store) RemoveRoot(ctx context.Context, id int64) error {
 // completed ones if completedOnly is set, or nil if there is none.
 func (s *Store) LatestScan(ctx context.Context, key string, completedOnly bool) (*model.ScanInfo, error) {
 	query := `SELECT id, status, started_at, COALESCE(finished_at, 0), files, dirs, bytes, disk_bytes, errors
-		FROM scan_runs WHERE root = ?`
+		FROM scan_runs WHERE root = ? AND removed = 0`
 	args := []any{key}
 	if completedOnly {
 		query += " AND status = ?"
 		args = append(args, model.StatusCompleted)
 	}
 	var si model.ScanInfo
-	err := s.db.QueryRowContext(ctx, query+" ORDER BY id DESC LIMIT 1", args...).Scan(
+	err := s.rd.QueryRowContext(ctx, query+" ORDER BY id DESC LIMIT 1", args...).Scan(
 		&si.ID, &si.Status, &si.StartedAt, &si.FinishedAt,
 		&si.Files, &si.Dirs, &si.Bytes, &si.DiskBytes, &si.Errors)
 	if errors.Is(err, sql.ErrNoRows) {

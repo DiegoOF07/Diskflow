@@ -77,6 +77,9 @@ export interface RootInfo {
   last: ScanInfo | null // latest attempt, whatever its status
 }
 
+/** Whether a folder is being scanned: '' (no), still walking, or saving the results. */
+export type ScanState = '' | 'running' | 'saving'
+
 /** Unsubscribes an event listener. */
 export type Off = () => void
 
@@ -92,10 +95,12 @@ export interface Backend {
   getRoot(id: number): Promise<RootInfo>
   /** A blank name restores the folder's own name. */
   renameRoot(id: number, name: string): Promise<void>
-  /** Takes the folder out of the catalog and deletes its scans; never touches its files. */
+  /** Takes the folder out of the catalog and deletes its scans; never touches its files. Removing it twice is not an error. */
   removeRoot(id: number): Promise<void>
   startScan(root: string): Promise<void>
   cancelScan(): Promise<void>
+  /** Tells a view opened in the middle of a scan that it is running. */
+  scanState(root: string): Promise<ScanState>
   /** Resolves to null if root has never been scanned. */
   root(root: string): Promise<Node | null>
   /** Up to limit children, biggest on disk first. */

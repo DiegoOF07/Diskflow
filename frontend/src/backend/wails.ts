@@ -9,6 +9,7 @@ import {
   PickFolder,
   RemoveRoot,
   RenameRoot,
+  ScanState,
   Root,
   Search,
   ShowInExplorer,
@@ -16,7 +17,16 @@ import {
   Trail,
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import type { Backend, Node, Page, Progress, RootInfo, SearchResult, Summary } from './types'
+import type {
+  Backend,
+  Node,
+  Page,
+  Progress,
+  RootInfo,
+  ScanState as State,
+  SearchResult,
+  Summary,
+} from './types'
 
 // Event names emitted by internal/desktop/app.go.
 const EVENT_PROGRESS = 'scan:progress'
@@ -32,6 +42,7 @@ export const wailsBackend: Backend = {
   removeRoot: (id) => RemoveRoot(id),
   startScan: (root) => StartScan(root),
   cancelScan: () => CancelScan(),
+  scanState: async (root) => (await ScanState(root)) as State,
   // The generated types say model.Node, but Go returns nil for a never-scanned root.
   root: async (root) => ((await Root(root)) as Node | null) ?? null,
   children: async (root, parentId, limit) => (await Children(root, parentId, limit)) as Node[],

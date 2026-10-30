@@ -9,6 +9,7 @@ import type { Backend, RootInfo } from '../../backend/types'
 export function useRoots(backend: Backend) {
   const roots = ref<RootInfo[]>([])
   const loaded = ref(false) // distinguishes "no folders yet" from "still loading"
+  const removing = ref<number[]>([]) // folders being removed; their button is disabled
   const error = ref('')
 
   async function attempt<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -46,13 +47,20 @@ export function useRoots(backend: Backend) {
 
   const remove = (id: number) =>
     attempt(async () => {
-      await backend.removeRoot(id)
+      if (removing.value.includes(id)) return
+      removing.value = [...removing.value, id]
+      try {
+        await backend.removeRoot(id)
+      } finally {
+        removing.value = removing.value.filter((r) => r !== id)
+      }
       await load()
     })
 
   return {
     roots: readonly(roots),
     loaded: readonly(loaded),
+    removing: readonly(removing),
     error: readonly(error),
     load,
     add,

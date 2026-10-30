@@ -71,7 +71,12 @@ consume:
 	}
 
 	cb.OnProgress(r.progress)
-	sum := r.finish(ctx, <-walkErr, cb.OnSaving)
+	sum := r.finish(ctx, <-walkErr, func() {
+		e.mu.Lock()
+		e.saving = true
+		e.mu.Unlock()
+		cb.OnSaving()
+	})
 	sum.ElapsedMs = time.Since(start).Milliseconds()
 	cb.OnDone(sum)
 	e.requestPrune()

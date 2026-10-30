@@ -56,6 +56,21 @@ describe('remove', () => {
     expect(r.roots.value.map((x) => x.id)).toEqual([2])
   })
 
+  it('ignores a second click while the first removal runs', async () => {
+    backend.hold('remove:1')
+    const r = setup()
+    await r.load()
+    const first = r.remove(1)
+    const second = r.remove(1)
+    expect(r.removing.value).toEqual([1])
+    backend.release('remove:1')
+    await Promise.all([first, second])
+    expect(backend.removeCalls).toBe(1)
+    expect(r.removing.value).toEqual([])
+    expect(r.error.value).toBe('')
+    expect(r.roots.value.map((x) => x.id)).toEqual([2])
+  })
+
   it('shows the error and keeps the list', async () => {
     backend.failRemove = 'engine: a scan is already running'
     const r = setup()

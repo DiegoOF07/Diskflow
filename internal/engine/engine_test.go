@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -460,5 +461,64 @@ func TestNewSearchCancelsThePreviousOne(t *testing.T) {
 	e.CancelSearch()
 	if second.Err() == nil {
 		t.Fatal("CancelSearch left the search running")
+	}
+}
+
+func TestScanStateFollowsTheScanOfItsRoot(t *testing.T) {
+	e := newEngine(t)
+	other := t.TempDir()
+	if s, err := e.ScanState(bigTree); s != ScanIdle || err != nil {
+		t.Fatalf("before scanning: %q, %v", s, err)
+	}
+	var states []string
+	var mu sync.Mutex
+	record := func() {
+		s, _ := e.ScanState(bigTree)
+		mu.Lock()
+		states = append(states, s)
+		mu.Unlock()
+	}
+	_, err := e.StartScan(bigTree, Callbacks{
+		OnProgress: func(model.Progress) { record() },
+		OnSaving:   record,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := e.ScanState(other); s != ScanIdle {
+		t.Fatalf("another folder: %q, want idle", s)
+	}
+	e.Wait()
+	if s, _ := e.ScanState(bigTree); s != ScanIdle {
+		t.Fatalf("after the scan: %q, want idle", s)
+	}
+	if len(states) < 2 || states[0] != ScanRunning || states[len(states)-1] != ScanSaving {
+		t.Fatalf("states during the scan = %q, want running... then saving", states)
+	}
+}
+
+func TestRemovedRootIsPrunedInTheBackground(t *testing.T) {
+	pruned := make(chan int64, 8)
+	e, err := New(filepath.Join(t.TempDir(), "diskflow.db"), Options{pruned: func(n int64) { pruned <- n }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { e.Close() })
+	<-pruned // the pass New asks for
+	dir, st := generate(t, 300)
+	r, _ := e.AddRoot(dir, "")
+	scanToEnd(t, e, dir)
+	<-pruned // after the scan
+
+	if err := e.RemoveRoot(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case n := <-pruned:
+		if n < int64(st.Files) {
+			t.Fatalf("pruned %d entries, want at least the %d files of the removed folder", n, st.Files)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no pruning after RemoveRoot")
 	}
 }

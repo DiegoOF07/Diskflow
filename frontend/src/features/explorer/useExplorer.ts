@@ -170,8 +170,16 @@ export function useExplorer(backend: Backend, root: string) {
       copiedTimer = setTimeout(() => (copied.value = null), COPIED_MS)
     })
 
+  // A scan may have started from an earlier visit to this view.
+  async function syncScan() {
+    const state = await backend.scanState(root)
+    if (!state || scanning.value) return
+    scanning.value = true
+    saving.value = state === 'saving'
+  }
+
   // Settles once the current index is shown, or the error is.
-  const ready = attempt(loadRoot)
+  const ready = attempt(() => Promise.all([loadRoot(), syncScan()]))
 
   return {
     root,

@@ -106,10 +106,11 @@ func (s *Store) FinishScan(ctx context.Context, scanID int64, status string, p m
 var pruneChunk int64 = 10_000
 
 // Prune deletes, in chunks, the entries nobody will read again: those of every
-// finished scan except the latest completed one of each root (scan_runs rows
-// stay as history). A scan never leaves that set once in it, so each chunk can
-// run on its own. Prune returns how many entries it deleted and stops between
-// chunks when ctx is cancelled; the next call resumes.
+// finished scan except the latest completed one of each root, and those of
+// removed roots. A scan never leaves that set once in it, so each chunk can run
+// on its own. scan_runs rows stay as history, except a removed root's, which go
+// once their entries are gone. Prune returns how many entries it deleted and
+// stops between chunks when ctx is cancelled; the next call resumes.
 func (s *Store) Prune(ctx context.Context) (int64, error) {
 	var deleted int64
 	for {
@@ -118,8 +119,8 @@ func (s *Store) Prune(ctx context.Context) (int64, error) {
 		}
 		res, err := s.db.ExecContext(ctx, `DELETE FROM entries WHERE (scan_id, id) IN (
 			SELECT scan_id, id FROM entries WHERE scan_id IN (
-				SELECT id FROM scan_runs WHERE status <> ? AND id NOT IN (
-					SELECT MAX(id) FROM scan_runs WHERE status = ? GROUP BY root))
+				SELECT id FROM scan_runs WHERE status <> ? AND (removed = 1 OR id NOT IN (
+					SELECT MAX(id) FROM scan_runs WHERE status = ? AND removed = 0 GROUP BY root)))
 			LIMIT ?)`,
 			model.StatusRunning, model.StatusCompleted, pruneChunk)
 		if err != nil {
@@ -131,6 +132,11 @@ func (s *Store) Prune(ctx context.Context) (int64, error) {
 		}
 		deleted += n
 		if n < pruneChunk {
+			_, err := s.db.ExecContext(ctx, `DELETE FROM scan_runs WHERE removed = 1
+				AND NOT EXISTS (SELECT 1 FROM entries WHERE scan_id = scan_runs.id)`)
+			if err != nil {
+				return deleted, fmt.Errorf("store: prune: %w", err)
+			}
 			return deleted, nil
 		}
 	}

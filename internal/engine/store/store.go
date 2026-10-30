@@ -23,8 +23,16 @@ var migrations embed.FS
 // ErrNotFound is returned when a requested scan or entry does not exist.
 var ErrNotFound = errors.New("store: not found")
 
+// readConns is how many queries can read at once.
+const readConns = 4
+
+// Store keeps two pools on the same file. SQLite allows one writer at a time,
+// so db has a single connection, which avoids SQLITE_BUSY between our own
+// goroutines. In WAL mode readers need no lock, so rd serves the UI's queries
+// without queueing behind a long write such as Prune or a scan's inserts.
 type Store struct {
-	db *sql.DB
+	db *sql.DB // writes, and reads that must see this connection's writes
+	rd *sql.DB // read-only queries
 }
 
 // Open opens (or creates) the database at path, applies pending migrations and
@@ -41,7 +49,6 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: open: %w", err)
 	}
-	// SQLite allows a single writer; one connection avoids SQLITE_BUSY between our own goroutines.
 	db.SetMaxOpenConns(1)
 
 	s := &Store{db: db}
@@ -53,11 +60,18 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: recover: %w", err)
 	}
+	// Opened after the migrations, so readers never see an older schema.
+	s.rd, err = sql.Open("sqlite", dsn+"&_pragma=query_only(1)")
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: open: %w", err)
+	}
+	s.rd.SetMaxOpenConns(readConns)
 	return s, nil
 }
 
 func (s *Store) Close() error {
-	return s.db.Close()
+	return errors.Join(s.rd.Close(), s.db.Close())
 }
 
 // migrate applies, in order, every migrations/NNN_*.sql whose number is
