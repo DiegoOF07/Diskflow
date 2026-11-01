@@ -124,7 +124,7 @@ async function confirmRemove(id: number) {
 
 <style scoped>
 .home {
-  padding: 16px 20px;
+  padding: var(--space-4);
   max-width: 1100px;
 }
 .loading {
@@ -160,8 +160,9 @@ h1 {
 }
 .root {
   display: flex;
+  flex-wrap: wrap; /* in a narrow window the actions move under the folder */
   align-items: center;
-  gap: 16px;
+  gap: var(--space-2) var(--space-4);
   padding: 12px 8px;
   border-bottom: 1px solid var(--contour);
 }
@@ -169,7 +170,7 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
+  flex: 1 1 240px;
   min-width: 0;
 }
 .name {
@@ -200,6 +201,7 @@ h1 {
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
 }
