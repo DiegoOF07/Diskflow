@@ -20,26 +20,34 @@ const root = (index: ScanInfo | null, last: ScanInfo | null) => ({ ...rootInfo(1
 
 describe('rootStatus', () => {
   it('a folder never scanned', () => {
-    expect(rootStatus(root(null, null), NOW)).toBe('Sin analizar')
+    expect(rootStatus(root(null, null), NOW)).toEqual({ text: 'Sin analizar' })
   })
   it('a scan in progress', () => {
-    expect(rootStatus(root(scan(1, 'completed'), scan(2, 'running', 0)), NOW)).toBe('Analizando…')
+    expect(rootStatus(root(scan(1, 'completed'), scan(2, 'running', 0)), NOW)).toEqual({
+      text: 'Analizando…',
+    })
   })
   it('the age of the index', () => {
     const s = scan(1, 'completed')
-    expect(rootStatus(root(s, s), NOW)).toBe('Analizado hace 3 horas')
+    expect(rootStatus(root(s, s), NOW)).toEqual({ text: 'Analizado hace 3 horas' })
   })
-  it('a later attempt that did not complete', () => {
-    expect(rootStatus(root(scan(1, 'completed'), scan(2, 'failed')), NOW)).toBe(
-      'Analizado hace 3 horas · el último intento falló',
-    )
-    expect(rootStatus(root(scan(1, 'completed'), scan(2, 'cancelled')), NOW)).toBe(
-      'Analizado hace 3 horas · el último intento se canceló',
-    )
+  it('a later attempt that did not complete is a note, a problem only if it failed', () => {
+    expect(rootStatus(root(scan(1, 'completed'), scan(2, 'failed')), NOW)).toEqual({
+      text: 'Analizado hace 3 horas',
+      note: 'el último intento falló',
+      problem: true,
+    })
+    expect(rootStatus(root(scan(1, 'completed'), scan(2, 'cancelled')), NOW)).toEqual({
+      text: 'Analizado hace 3 horas',
+      note: 'el último intento se canceló',
+    })
   })
   it('only attempts that did not complete', () => {
-    expect(rootStatus(root(null, scan(2, 'failed')), NOW)).toBe('El análisis falló')
-    expect(rootStatus(root(null, scan(2, 'cancelled')), NOW)).toBe('Análisis cancelado')
+    expect(rootStatus(root(null, scan(2, 'failed')), NOW)).toEqual({
+      text: 'El análisis falló',
+      problem: true,
+    })
+    expect(rootStatus(root(null, scan(2, 'cancelled')), NOW)).toEqual({ text: 'Análisis cancelado' })
   })
 })
 

@@ -21,6 +21,7 @@
   /* Land use: treemap cells now, project categories in Fase 3. */
   --forest: #7fa585;
   --forest-active: #94b79a;
+  --forest-strong: #5b8a64; /* bars on paper: 3:1 for graphics */
   --field: #d9c985;
   --sand: #cdc5ae;
   --rock: #b7bbb4;
@@ -66,6 +67,7 @@
 
     --forest: #3b5a43;
     --forest-active: #466b4f;
+    --forest-strong: #6f9c78;
     --field: #5f5634;
     --sand: #4f4c40;
     --rock: #424a50;
@@ -175,6 +177,48 @@ input::placeholder {
 }
 .badge.problem {
   color: var(--boundary);
+}
+
+/* A message about the view: water informs, boundary reports a problem. */
+.notice {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--water-soft);
+  border-left: 3px solid var(--water);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+.notice.problem {
+  background: var(--boundary-soft);
+  border-left-color: var(--boundary);
+}
+
+/* A floating list of actions, placed by the view with position: fixed. */
+.menu {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--contour);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+}
+.menu button:hover,
+.menu button:focus-visible {
+  background: var(--row-hover);
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
