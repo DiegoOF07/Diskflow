@@ -33,3 +33,9 @@ build with `wails build`.
 - `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
   as well as the application itself (right click the exe -> properties -> details)
 - `wails.exe.manifest` - The main application manifest file.
+## DiskFlow icon
+
+`appicon.svg` is the source of the icon: three contour lines shaped like a "D", with the summit in the forest colour of the
+UI. `appicon.png` (1024 px) and `windows/icon.ico` are rendered from it; the `.ico` holds PNG images at 16, 20, 24, 32,
+40, 48, 64 and 256 px. To change the icon, edit the SVG, render those sizes with a rasterizer such as
+`@resvg/resvg-js` (outside the repo, so it does not become a dependency) and pack them into the `.ico`.
