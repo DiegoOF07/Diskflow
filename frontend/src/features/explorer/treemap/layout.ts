@@ -62,7 +62,7 @@ export function layoutTreemap(nodes: readonly Node[], width: number, height: num
     .map((l) => ({ node: l.data as Node, x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 }))
 }
 
-const CHAR_WIDTH = 7 // average px per character at the treemap's 12px font
+const CHAR_WIDTH = 6.5 // average px per character in the treemap's 12px condensed font
 const PADDING = 8
 
 /** Shortens name to fit width px, or returns "" if not even one letter fits. */
