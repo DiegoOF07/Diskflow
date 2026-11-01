@@ -59,6 +59,6 @@ if (props.scan) void router.replace({ query: {} })
   padding: 16px 20px;
 }
 .missing a {
-  color: var(--accent);
+  color: var(--water);
 }
 </style>

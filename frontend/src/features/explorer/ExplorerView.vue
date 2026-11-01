@@ -342,7 +342,7 @@ onBeforeUnmount(() => {
                 📁 {{ n.name }}
               </button>
               <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
-              <span v-if="n.err" class="badge" :title="unreadableReason(n.err)">sin acceso</span>
+              <span v-if="n.err" class="badge problem" :title="unreadableReason(n.err)">sin acceso</span>
               <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
                 {{ label }}
               </span>
@@ -411,7 +411,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .back {
-  color: var(--accent);
+  color: var(--water);
   text-decoration: none;
 }
 .title {
@@ -419,7 +419,7 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 .root {
-  color: var(--muted);
+  color: var(--graphite);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -428,17 +428,17 @@ onBeforeUnmount(() => {
 }
 .status {
   min-height: 1.4em;
-  color: var(--muted);
+  color: var(--graphite);
   margin: 10px 0;
 }
 .error {
-  background: var(--danger-bg);
-  color: var(--danger);
+  background: var(--boundary-soft);
+  color: var(--boundary);
   padding: 8px 12px;
   border-radius: 6px;
 }
 .empty {
-  color: var(--muted);
+  color: var(--graphite);
 }
 .crumbs {
   display: flex;
@@ -452,7 +452,7 @@ onBeforeUnmount(() => {
 }
 .total {
   margin-left: auto;
-  color: var(--muted);
+  color: var(--graphite);
 }
 table {
   width: 100%;
@@ -461,12 +461,12 @@ table {
 th,
 td {
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--contour);
   text-align: left;
 }
 th {
   font-weight: 600;
-  color: var(--muted);
+  color: var(--graphite);
 }
 tr.hovered {
   background: var(--row-hover);
@@ -486,27 +486,21 @@ tr.hovered {
 .bar {
   position: absolute;
   inset: 4px auto 4px 0;
-  background: var(--accent-soft);
+  background: var(--water-soft);
   border-radius: 3px;
 }
 .pct {
   position: relative;
 }
 .badge {
-  margin-left: 8px;
-  font-size: 11px;
-  color: var(--danger);
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  padding: 0 4px;
+  margin-left: var(--space-2);
 }
 .badge.info {
-  color: var(--muted);
   cursor: help;
 }
 .logical,
 .date {
-  color: var(--muted);
+  color: var(--graphite);
 }
 th .sort {
   font: inherit;
@@ -518,10 +512,10 @@ th .sort {
 }
 th[aria-sort='ascending'],
 th[aria-sort='descending'] {
-  color: var(--fg);
+  color: var(--ink);
 }
 tbody tr:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--water);
   outline-offset: -2px;
 }
 .more {
@@ -531,12 +525,6 @@ tbody tr:focus-visible {
 }
 .search input {
   width: min(420px, 100%);
-  padding: 6px 10px;
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
 }
 .hit {
   cursor: pointer;
@@ -545,7 +533,7 @@ tbody tr:focus-visible {
   background: var(--row-hover);
 }
 .dir {
-  color: var(--muted);
+  color: var(--graphite);
   max-width: 0; /* lets the column shrink and ellipsize instead of widening the table */
   width: 50%;
   overflow: hidden;
@@ -553,7 +541,7 @@ tbody tr:focus-visible {
   white-space: nowrap;
 }
 .error-text {
-  color: var(--danger);
+  color: var(--boundary);
 }
 .actions {
   visibility: hidden;
@@ -573,23 +561,23 @@ tr:focus-within .actions {
 .copied {
   margin-left: 8px;
   font-size: 12px;
-  color: var(--accent);
+  color: var(--water);
 }
 .menu {
   position: fixed;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  padding: 4px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--contour);
+  border-radius: var(--radius-panel);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
 }
 .menu button {
   text-align: left;
   font: inherit;
-  color: var(--fg);
+  color: var(--ink);
   background: none;
   border: none;
   padding: 6px 10px;
@@ -602,22 +590,22 @@ tr:focus-within .actions {
   outline: none;
 }
 tr.found {
-  background: var(--accent-soft);
+  background: var(--water-soft);
 }
 .notice {
-  background: var(--accent-soft);
+  background: var(--water-soft);
   padding: 8px 12px;
   border-radius: 6px;
 }
 .notice.warn {
-  background: var(--danger-bg);
+  background: var(--boundary-soft);
 }
 .notice a,
 .error a {
-  color: var(--accent);
+  color: var(--water);
 }
 .coverage {
-  color: var(--muted);
+  color: var(--graphite);
   margin: 8px 0;
 }
 .unreadable {

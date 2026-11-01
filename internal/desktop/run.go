@@ -6,6 +6,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 // Run opens the main window and blocks until it closes.
@@ -22,7 +23,8 @@ func appOptions(app *App, assets fs.FS) *options.App {
 		MinHeight:        minHeight,
 		StartHidden:      true, // shown by startup once it fits the screen
 		AssetServer:      &assetserver.Options{Assets: assets},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
+		BackgroundColour: background(prefersDark()),
+		Windows:          &windows.Options{Theme: windows.SystemDefault}, // the title bar follows the Windows theme
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind:             []any{app},
