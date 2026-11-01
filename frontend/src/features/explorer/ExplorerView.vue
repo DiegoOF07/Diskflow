@@ -131,19 +131,23 @@ onBeforeUnmount(() => {
   <main class="explorer">
     <header class="toolbar">
       <RouterLink to="/" class="back">← Inicio</RouterLink>
-      <h1 class="title">{{ info.name }}</h1>
-      <code class="root" :title="info.path">{{ info.path }}</code>
-      <button type="button" class="primary" :disabled="scanning" @click="ex.scan">Analizar</button>
-      <button
-        type="button"
-        :disabled="!scanning || saving"
-        :title="
-          saving ? 'Los resultados ya se están guardando; cancelar ahora perdería el análisis' : undefined
-        "
-        @click="ex.cancel"
-      >
-        Cancelar
-      </button>
+      <div class="heading">
+        <h1 class="title">{{ info.name }}</h1>
+        <code class="root" :title="info.path">{{ info.path }}</code>
+      </div>
+      <div class="commands">
+        <button type="button" class="primary" :disabled="scanning" @click="ex.scan">Analizar</button>
+        <button
+          type="button"
+          :disabled="!scanning || saving"
+          :title="
+            saving ? 'Los resultados ya se están guardando; cancelar ahora perdería el análisis' : undefined
+          "
+          @click="ex.cancel"
+        >
+          Cancelar
+        </button>
+      </div>
     </header>
 
     <p class="status" aria-live="polite">
@@ -217,7 +221,7 @@ onBeforeUnmount(() => {
       />
     </div>
 
-    <section v-if="searchActive" aria-label="Resultados de la búsqueda">
+    <section v-if="searchActive" class="results" aria-label="Resultados de la búsqueda">
       <p class="status" aria-live="polite">
         <template v-if="searching">Buscando…</template>
         <template v-else-if="search.error.value">
@@ -261,129 +265,150 @@ onBeforeUnmount(() => {
         </button>
         — no se pudieron leer, así que el total no los incluye.
       </p>
-      <section v-if="unreadable.open.value" class="unreadable" aria-label="Elementos sin acceso">
-        <p class="status" aria-live="polite">
-          <template v-if="unreadable.loading.value">Cargando…</template>
-          <span v-else-if="unreadable.error.value" class="error-text">{{ unreadable.error.value }}</span>
-          <template v-else-if="unreadable.more.value">
-            Se muestran los primeros {{ UNREADABLE_LIMIT }}.
-          </template>
-        </p>
-        <table v-if="unreadable.hits.value.length" class="hits">
-          <thead>
-            <tr>
-              <th scope="col">Nombre</th>
-              <th scope="col">Carpeta</th>
-              <th scope="col">Motivo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="h in unreadable.hits.value"
-              :key="h.id"
-              tabindex="0"
-              class="hit"
-              title="Mostrar dónde está"
-              @click="pick(h)"
-              @keydown="onRowKey($event, () => pick(h))"
-            >
-              <td class="name">{{ h.kind === 'dir' ? '📁' : '📄' }} {{ h.name }}</td>
-              <td class="dir" :title="h.dir">{{ h.dir }}</td>
-              <td>{{ unreadableReason(h.err) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <TreemapChart
-        v-if="current && children.length"
-        :nodes="children"
-        :parent="current"
-        :highlighted="hovered ?? found"
-        @hover="hovered = $event"
-        @open="ex.open"
-      />
-
-      <table v-if="rows.length">
-        <thead>
-          <tr>
-            <th scope="col" :aria-sort="ariaSort('name')">
-              <button type="button" class="sort" @click="ex.sortBy('name')">Nombre{{ arrow('name') }}</button>
-            </th>
-            <th scope="col" class="num" :aria-sort="ariaSort('size')">
-              <button type="button" class="sort" @click="ex.sortBy('size')">
-                En disco{{ arrow('size') }}
-              </button>
-            </th>
-            <th v-if="logicalCol" scope="col" class="num">Lógico</th>
-            <th scope="col" class="num">% de la carpeta</th>
-            <th scope="col" class="num">Archivos</th>
-            <th scope="col" class="num" :aria-sort="ariaSort('modified')">
-              <button type="button" class="sort" @click="ex.sortBy('modified')">
-                Modificado{{ arrow('modified') }}
-              </button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="n in rows"
-            :key="n.id"
-            tabindex="0"
-            :data-id="n.id"
-            :class="{ hovered: hovered === n.id, found: found === n.id }"
-            @mouseenter="hovered = n.id"
-            @mouseleave="hovered = null"
-            @keydown="onRowKey($event, () => ex.open(n), n)"
-            @contextmenu.prevent="menuAt($event, n)"
-          >
-            <td class="name">
-              <button v-if="n.kind === 'dir'" type="button" class="link" tabindex="-1" @click="ex.open(n)">
-                📁 {{ n.name }}
-              </button>
-              <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
-              <span v-if="n.err" class="badge problem" :title="unreadableReason(n.err)">sin acceso</span>
-              <span v-for="label in flagLabels(n.flags)" :key="label" class="badge info" :title="sizeNote(n)">
-                {{ label }}
-              </span>
-              <span v-if="copied === n.id" class="copied" role="status">Ruta copiada</span>
-              <span class="actions">
-                <button
-                  type="button"
-                  tabindex="-1"
-                  title="Mostrar en el Explorador"
-                  aria-label="Mostrar en el Explorador"
-                  @click="ex.showInExplorer(n)"
+      <div class="workspace">
+        <div v-if="current && children.length" class="map-pane">
+          <TreemapChart
+            :nodes="children"
+            :parent="current"
+            :highlighted="hovered ?? found"
+            @hover="hovered = $event"
+            @open="ex.open"
+          />
+        </div>
+        <div class="table-pane">
+          <section v-if="unreadable.open.value" class="unreadable" aria-label="Elementos sin acceso">
+            <p class="status" aria-live="polite">
+              <template v-if="unreadable.loading.value">Cargando…</template>
+              <span v-else-if="unreadable.error.value" class="error-text">{{ unreadable.error.value }}</span>
+              <template v-else-if="unreadable.more.value">
+                Se muestran los primeros {{ UNREADABLE_LIMIT }}.
+              </template>
+            </p>
+            <table v-if="unreadable.hits.value.length" class="hits">
+              <thead>
+                <tr>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">Carpeta</th>
+                  <th scope="col">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="h in unreadable.hits.value"
+                  :key="h.id"
+                  tabindex="0"
+                  class="hit"
+                  title="Mostrar dónde está"
+                  @click="pick(h)"
+                  @keydown="onRowKey($event, () => pick(h))"
                 >
-                  📂
-                </button>
-                <button
-                  type="button"
-                  tabindex="-1"
-                  title="Copiar ruta"
-                  aria-label="Copiar ruta"
-                  @click="ex.copyPath(n)"
-                >
-                  📋
-                </button>
-              </span>
-            </td>
-            <td class="num">{{ formatBytes(n.diskSize) }}</td>
-            <td v-if="logicalCol" class="num logical">{{ formatBytes(n.size) }}</td>
-            <td class="num share">
-              <span class="bar" :style="{ width: `${share(n.diskSize) * 100}%` }" aria-hidden="true"></span>
-              <span class="pct">{{ formatPercent(n.diskSize, current?.diskSize ?? 0) }}</span>
-            </td>
-            <td class="num">{{ formatCount(n.files) }}</td>
-            <td class="num date">{{ formatDate(n.modified) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else-if="trail.length" class="empty">Carpeta vacía.</p>
-      <p v-if="rows.length" class="status more">
-        Mostrando {{ formatCount(rows.length) }} de {{ formatCount(total) }}
-        <button v-if="hasMore" type="button" @click="ex.loadMore">Cargar más</button>
-      </p>
+                  <td class="name">{{ h.kind === 'dir' ? '📁' : '📄' }} {{ h.name }}</td>
+                  <td class="dir" :title="h.dir">{{ h.dir }}</td>
+                  <td>{{ unreadableReason(h.err) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <table v-if="rows.length" class="entries">
+            <thead>
+              <tr>
+                <th scope="col" :aria-sort="ariaSort('name')">
+                  <button type="button" class="sort" @click="ex.sortBy('name')">
+                    Nombre{{ arrow('name') }}
+                  </button>
+                </th>
+                <th scope="col" class="num" :aria-sort="ariaSort('size')">
+                  <button type="button" class="sort" @click="ex.sortBy('size')">
+                    En disco{{ arrow('size') }}
+                  </button>
+                </th>
+                <th v-if="logicalCol" scope="col" class="num col-logical">Lógico</th>
+                <th scope="col" class="num share">% de la carpeta</th>
+                <th scope="col" class="num col-files">Archivos</th>
+                <th scope="col" class="num col-date" :aria-sort="ariaSort('modified')">
+                  <button type="button" class="sort" @click="ex.sortBy('modified')">
+                    Modificado{{ arrow('modified') }}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="n in rows"
+                :key="n.id"
+                tabindex="0"
+                :data-id="n.id"
+                :class="{ hovered: hovered === n.id, found: found === n.id }"
+                @mouseenter="hovered = n.id"
+                @mouseleave="hovered = null"
+                @keydown="onRowKey($event, () => ex.open(n), n)"
+                @contextmenu.prevent="menuAt($event, n)"
+              >
+                <td class="name">
+                  <button
+                    v-if="n.kind === 'dir'"
+                    type="button"
+                    class="link"
+                    tabindex="-1"
+                    @click="ex.open(n)"
+                  >
+                    📁 {{ n.name }}
+                  </button>
+                  <span v-else>{{ n.kind === 'link' ? '🔗' : '📄' }} {{ n.name }}</span>
+                  <span v-if="n.err" class="badge problem" :title="unreadableReason(n.err)">sin acceso</span>
+                  <span
+                    v-for="label in flagLabels(n.flags)"
+                    :key="label"
+                    class="badge info"
+                    :title="sizeNote(n)"
+                  >
+                    {{ label }}
+                  </span>
+                  <span v-if="copied === n.id" class="copied" role="status">Ruta copiada</span>
+                  <span class="actions">
+                    <button
+                      type="button"
+                      tabindex="-1"
+                      title="Mostrar en el Explorador"
+                      aria-label="Mostrar en el Explorador"
+                      @click="ex.showInExplorer(n)"
+                    >
+                      📂
+                    </button>
+                    <button
+                      type="button"
+                      tabindex="-1"
+                      title="Copiar ruta"
+                      aria-label="Copiar ruta"
+                      @click="ex.copyPath(n)"
+                    >
+                      📋
+                    </button>
+                  </span>
+                </td>
+                <td class="num">{{ formatBytes(n.diskSize) }}</td>
+                <td v-if="logicalCol" class="num logical col-logical">{{ formatBytes(n.size) }}</td>
+                <td class="num share">
+                  <span
+                    class="bar"
+                    :style="{ width: `${share(n.diskSize) * 100}%` }"
+                    aria-hidden="true"
+                  ></span>
+                  <span class="pct">{{ formatPercent(n.diskSize, current?.diskSize ?? 0) }}</span>
+                </td>
+                <td class="num col-files">{{ formatCount(n.files) }}</td>
+                <td class="num date col-date">{{ formatDate(n.modified) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else-if="trail.length" class="empty">Carpeta vacía.</p>
+          <p v-if="rows.length" class="status more">
+            Mostrando {{ formatCount(rows.length) }} de {{ formatCount(total) }}
+            <button v-if="hasMore" type="button" @click="ex.loadMore">Cargar más</button>
+          </p>
+        </div>
+      </div>
     </template>
     <div
       v-if="menu"
@@ -402,11 +427,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .explorer {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-4) 0;
 }
 .toolbar {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2) var(--space-4);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -414,17 +439,86 @@ onBeforeUnmount(() => {
   color: var(--water);
   text-decoration: none;
 }
+.heading {
+  flex: 1;
+  min-width: 0; /* lets a long path ellipsize instead of widening the page */
+}
 .title {
-  font-size: 16px;
+  font-size: var(--text-xl);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .root {
+  display: block;
   color: var(--graphite);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.commands {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* The map and the table: stacked by default, side by side in a wide window,
+   where the page fits the window and each pane scrolls on its own. */
+.workspace {
+  display: grid;
+  gap: var(--space-4);
+}
+.map-pane {
+  height: clamp(200px, 42vh, 380px);
+}
+.table-pane {
+  container-type: inline-size;
   min-width: 0;
-  flex: 1;
+  padding-bottom: var(--space-4);
+}
+@media (min-width: 960px) {
+  .explorer {
+    height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+  .workspace,
+  .results {
+    flex: 1;
+    min-height: 0;
+  }
+  .workspace {
+    grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr);
+  }
+  .map-pane {
+    height: auto;
+    padding-bottom: var(--space-4);
+  }
+  .table-pane,
+  .results {
+    overflow: auto;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--paper);
+    z-index: 1;
+  }
+}
+
+/* Secondary columns go first as the table gets narrower. */
+@container (max-width: 640px) {
+  .col-logical,
+  .col-files {
+    display: none;
+  }
+}
+@container (max-width: 480px) {
+  .col-date {
+    display: none;
+  }
+  .entries .share {
+    width: 90px; /* .share sets 160px further down */
+  }
 }
 .status {
   min-height: 1.4em;
@@ -525,6 +619,7 @@ tbody tr:focus-visible {
 }
 .search input {
   width: min(420px, 100%);
+  margin-bottom: 16px;
 }
 .hit {
   cursor: pointer;

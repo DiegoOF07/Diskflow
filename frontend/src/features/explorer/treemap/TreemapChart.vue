@@ -12,20 +12,23 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ open: [node: Node]; hover: [id: number | null] }>()
 
-const HEIGHT = 300
 const box = ref<HTMLDivElement>()
 const width = ref(0)
+const height = ref(0)
 let observer: ResizeObserver | undefined
 
-// The SVG is sized in pixels, so it follows the container's width.
+// The SVG is sized in pixels, so it follows its box, whose size the page layout sets.
 onMounted(() => {
-  observer = new ResizeObserver(([entry]) => (width.value = Math.floor(entry.contentRect.width)))
+  observer = new ResizeObserver(([entry]) => {
+    width.value = Math.floor(entry.contentRect.width)
+    height.value = Math.floor(entry.contentRect.height)
+  })
   observer.observe(box.value!)
 })
 onBeforeUnmount(() => observer?.disconnect())
 
 const cells = computed(() => groupOthers(props.nodes, props.parent))
-const rects = computed(() => layoutTreemap(cells.value, width.value, HEIGHT))
+const rects = computed(() => layoutTreemap(cells.value, width.value, height.value))
 
 // A row hidden inside "Otros" highlights the "Otros" cell.
 const active = computed(() => {
@@ -44,8 +47,8 @@ const kindClass = (n: Node) => (n.id === OTHERS_ID ? 'others' : n.kind)
 </script>
 
 <template>
-  <div ref="box" class="treemap" :style="{ height: `${HEIGHT}px` }" @mouseleave="emit('hover', null)">
-    <svg :width="width" :height="HEIGHT" role="img" aria-label="Mapa de tamaños de la carpeta actual">
+  <div ref="box" class="treemap" @mouseleave="emit('hover', null)">
+    <svg :width="width" :height="height" role="img" aria-label="Mapa de tamaños de la carpeta actual">
       <g
         v-for="r in rects"
         :key="r.node.id"
@@ -69,7 +72,8 @@ const kindClass = (n: Node) => (n.id === OTHERS_ID ? 'others' : n.kind)
 <style scoped>
 .treemap {
   width: 100%;
-  margin: 8px 0 12px;
+  height: 100%;
+  overflow: hidden; /* the SVG must not push its box bigger, or the observer would grow it forever */
 }
 svg {
   display: block;

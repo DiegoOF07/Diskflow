@@ -25,9 +25,10 @@
   --sand: #cdc5ae;
   --rock: #b7bbb4;
 
-  /* Type: Barlow for text, its semi-condensed cut where space is tight. */
-  --font: 'Barlow', 'Segoe UI', system-ui, sans-serif;
-  --font-condensed: 'Barlow Semi Condensed', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  /* Type: IBM Plex Sans tells I, l and 1 apart in file names; its condensed
+     cut fits more of a name in a treemap cell. Its digits are tabular by default. */
+  --font: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-condensed: 'IBM Plex Sans Condensed', 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   --text-sm: 13px;
   --text-base: 14px;
   --text-md: 16px;
