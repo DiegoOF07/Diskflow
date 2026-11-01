@@ -8,6 +8,9 @@ const PATHS = {
   reveal: 'M2 4.5h4l1.5 1.5H13v1.5M2 4.5v8h10.5L14 8H4.5L3 12.5',
   copy: 'M5.5 5.5h7v8h-7zM3.5 10.5v-8h7',
   back: 'M10 3.5L5.5 8l4.5 4.5',
+  more: 'M2.5 8a1 1 0 1 0 2 0a1 1 0 1 0-2 0M7 8a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11.5 8a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+  rename: 'M10.5 3l2.5 2.5L6 12.5H3.5V10zM9 4.5L11.5 7',
+  remove: 'M4.5 4.5l7 7M11.5 4.5l-7 7',
 } as const
 
 defineProps<{ name: keyof typeof PATHS }>()

@@ -486,17 +486,6 @@ onBeforeUnmount(() => {
   color: var(--ink);
 }
 
-.notice {
-  margin: var(--space-2) 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--water-soft);
-  border-left: 3px solid var(--water);
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
-}
-.notice.problem {
-  background: var(--boundary-soft);
-  border-left-color: var(--boundary);
-}
 .error-text {
   color: var(--boundary);
 }
@@ -767,33 +756,5 @@ tr:focus-within .actions {
 .panel-head h2 {
   margin: 0;
   font-size: var(--text-md);
-}
-
-.menu {
-  position: fixed;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1);
-  background: var(--surface);
-  border: 1px solid var(--contour);
-  border-radius: var(--radius-panel);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
-}
-.menu button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  text-align: left;
-  color: var(--ink);
-  background: none;
-  border: none;
-  padding: 6px 10px;
-  border-radius: var(--radius-control);
-}
-.menu button:hover,
-.menu button:focus-visible {
-  background: var(--row-hover);
-  outline: none;
 }
 </style>
