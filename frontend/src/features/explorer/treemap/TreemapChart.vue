@@ -75,40 +75,37 @@ svg {
   display: block;
 }
 rect {
-  stroke: var(--bg);
+  stroke: var(--paper);
   stroke-width: 1;
 }
 text {
   font-size: 12px;
   pointer-events: none;
-  fill: var(--fg);
+  fill: var(--ink);
 }
 text.size {
   opacity: 0.8;
 }
 .cell.dir rect {
-  fill: var(--cell-dir);
+  fill: var(--forest);
   cursor: pointer;
 }
-.cell.dir text {
-  fill: #fff;
-}
 .cell.file rect {
-  fill: var(--cell-file);
+  fill: var(--sand);
 }
 .cell.link rect,
 .cell.other rect {
-  fill: var(--cell-other);
+  fill: var(--rock);
 }
 .cell.others rect {
-  fill: var(--cell-others);
+  fill: var(--rock);
 }
 .cell.active rect {
-  stroke: var(--fg);
+  stroke: var(--ink);
   stroke-width: 2;
 }
 .cell.dir.active rect,
 .cell.dir:hover rect {
-  fill: var(--cell-dir-hover);
+  fill: var(--forest-active);
 }
 </style>

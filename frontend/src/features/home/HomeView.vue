@@ -87,7 +87,7 @@ async function confirmRemove(id: number) {
           <span class="status">
             <span
               v-if="!r.available"
-              class="badge"
+              class="badge problem"
               title="No se encuentra la carpeta: puede que se haya movido o borrado, o que su unidad esté desconectada. Si ya no existe, quítala."
               >no disponible</span
             >
@@ -128,7 +128,7 @@ async function confirmRemove(id: number) {
   max-width: 1100px;
 }
 .loading {
-  color: var(--muted);
+  color: var(--graphite);
 }
 .toolbar {
   display: flex;
@@ -141,8 +141,8 @@ h1 {
   margin: 0;
 }
 .error {
-  background: var(--danger-bg);
-  color: var(--danger);
+  background: var(--boundary-soft);
+  color: var(--boundary);
   padding: 8px 12px;
   border-radius: 6px;
 }
@@ -151,7 +151,7 @@ h1 {
   text-align: center;
 }
 .hint {
-  color: var(--muted);
+  color: var(--graphite);
 }
 .roots {
   list-style: none;
@@ -163,7 +163,7 @@ h1 {
   align-items: center;
   gap: 16px;
   padding: 12px 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--contour);
 }
 .info {
   display: flex;
@@ -183,13 +183,13 @@ h1 {
   max-width: 320px;
 }
 .path {
-  color: var(--muted);
+  color: var(--graphite);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .status {
-  color: var(--muted);
+  color: var(--graphite);
   font-size: 12px;
 }
 .size {
@@ -204,21 +204,12 @@ h1 {
   align-items: center;
 }
 .confirm span {
-  color: var(--muted);
+  color: var(--graphite);
   font-size: 12px;
   max-width: 220px;
 }
 .badge {
-  margin-right: 6px;
-  font-size: 11px;
-  color: var(--danger);
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  padding: 0 4px;
+  margin-right: var(--space-2);
   cursor: help;
-}
-button.danger {
-  border-color: var(--danger);
-  color: var(--danger);
 }
 </style>
