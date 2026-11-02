@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useBackend } from '../../backend/inject'
 import type { RootInfo } from '../../backend/types'
 import AppIcon from '../../components/AppIcon.vue'
+import { onMenuKey } from '../../components/menuKeys'
 import { formatBytes, formatPercent } from '../explorer/format'
 import ContourMotif from './ContourMotif.vue'
 import { scaleOf } from './scale'
@@ -46,6 +47,13 @@ async function saveRename(id: number) {
   await rename(id, draft.value)
 }
 
+// The confirmation replaces the row's buttons, so it takes the focus.
+async function askRemove(r: RootInfo) {
+  confirming.value = r.id
+  await nextTick()
+  document.querySelector<HTMLElement>('.confirm button')?.focus()
+}
+
 // The confirmation stays, showing "Quitando…", until the folder is gone.
 async function confirmRemove(id: number) {
   await remove(id)
@@ -71,11 +79,14 @@ function act(fn: (r: RootInfo) => unknown) {
   closeMenu()
   if (root) void fn(root)
 }
-function onKey(e: KeyboardEvent) {
-  if (e.key !== 'Escape' || !menu.value) return
-  const trigger = menu.value.trigger
+// Closes the menu from the keyboard, giving the focus back to its button.
+function dismiss() {
+  const trigger = menu.value?.trigger
   closeMenu()
-  trigger.focus()
+  trigger?.focus()
+}
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Escape' && menu.value) dismiss()
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey)
@@ -217,11 +228,12 @@ onBeforeUnmount(() => {
       :aria-label="menu.root.name"
       :style="{ left: `${menu.x}px`, top: `${menu.y}px`, width: `${MENU_WIDTH}px` }"
       @click.stop
+      @keydown="onMenuKey($event, dismiss)"
     >
       <button type="button" role="menuitem" @click="act(startRename)">
         <AppIcon name="rename" />Renombrar
       </button>
-      <button type="button" role="menuitem" @click="act((r) => (confirming = r.id))">
+      <button type="button" role="menuitem" @click="act(askRemove)">
         <AppIcon name="remove" />Quitar del catálogo
       </button>
     </div>

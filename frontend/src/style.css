@@ -9,6 +9,7 @@
   --ink: #1b2a38;
   --graphite: #56636d;
   --contour: #c3ccc3;
+  --field-edge: #7f8a83; /* text fields need a 3:1 edge to be found; contour is for dividers */
   --row-hover: #e3e9e3;
 
   /* Water is the accent: actions, links and focus. Boundary marks errors. */
@@ -57,6 +58,7 @@
     --ink: #e2e8e3;
     --graphite: #97a3ab;
     --contour: #2d3a44;
+    --field-edge: #64727c;
     --row-hover: #202c36;
 
     --water: #82b8dd;
@@ -158,7 +160,7 @@ input:not([type]) {
   box-sizing: border-box;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--contour);
+  border: 1px solid var(--field-edge);
   border-radius: var(--radius-control);
 }
 input::placeholder {

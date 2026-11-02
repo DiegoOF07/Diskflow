@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useBackend } from '../../backend/inject'
 import AppIcon from '../../components/AppIcon.vue'
+import { onMenuKey } from '../../components/menuKeys'
 import type { Hit, Node, RootInfo, SortKey } from '../../backend/types'
 import { previousIndexNote } from '../home/status'
 import { progressFacts } from './facts'
@@ -59,10 +60,11 @@ const arrow = (key: SortKey) => (sort.value.key !== key ? '' : sort.value.desc ?
 
 // Context menu of a row, opened with the right button, the Menu key or Shift+F10.
 const MENU_WIDTH = 220
-const menu = ref<{ node: Node; x: number; y: number } | null>(null)
+const menu = ref<{ node: Node; x: number; y: number; returnTo: HTMLElement | null } | null>(null)
 const menuEl = useTemplateRef<HTMLElement>('menuEl')
 async function openMenu(node: Node, x: number, y: number) {
-  menu.value = { node, x: Math.min(x, window.innerWidth - MENU_WIDTH), y }
+  const returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  menu.value = { node, x: Math.min(x, window.innerWidth - MENU_WIDTH), y, returnTo }
   await nextTick()
   menuEl.value?.querySelector('button')?.focus()
 }
@@ -72,9 +74,15 @@ function menuAt(e: MouseEvent, node: Node) {
 function closeMenu() {
   menu.value = null
 }
+// Closes the menu from the keyboard, giving the focus back to where it was opened.
+function dismiss() {
+  const returnTo = menu.value?.returnTo
+  closeMenu()
+  returnTo?.focus()
+}
 function act(fn: (n: Node) => unknown) {
   const node = menu.value?.node
-  closeMenu()
+  dismiss()
   if (node) void fn(node)
 }
 
@@ -106,7 +114,7 @@ function onRowKey(e: KeyboardEvent, enter: () => unknown, node?: Node) {
 }
 function onKey(e: KeyboardEvent) {
   if (menu.value) {
-    if (e.key === 'Escape') closeMenu()
+    if (e.key === 'Escape') dismiss()
     return
   }
   if (e.ctrlKey && e.key === 'f' && searchBox.value) {
@@ -183,7 +191,7 @@ onBeforeUnmount(() => {
 
     <p v-if="error" class="notice problem" role="alert">
       {{ error }}
-      <RouterLink v-if="errorCode === 'root_unavailable'" to="/">Quitarla desde Inicio</RouterLink>
+      <RouterLink v-if="errorCode === 'root_unavailable'" to="/">Quitarla del catálogo en Inicio</RouterLink>
     </p>
     <p v-if="!info.available && errorCode !== 'root_unavailable'" class="notice problem" role="status">
       No se encuentra esta carpeta: puede que se haya movido o borrado, o que su unidad esté desconectada.
@@ -418,6 +426,7 @@ onBeforeUnmount(() => {
       :aria-label="menu.node.name"
       :style="{ left: `${menu.x}px`, top: `${menu.y}px`, width: `${MENU_WIDTH}px` }"
       @click.stop
+      @keydown="onMenuKey($event, dismiss)"
     >
       <button type="button" role="menuitem" @click="act(ex.showInExplorer)">
         <AppIcon name="reveal" />Mostrar en el Explorador
@@ -657,7 +666,8 @@ button.entry:hover {
   color: var(--graphite);
 }
 
-/* The share bar takes the map colour of the entry, tying each row to its cell. */
+/* The share bar takes the map colour of the entry, tying each row to its cell.
+   Full colour: the percentage over it passes 4.5:1, like the treemap labels. */
 .share {
   position: relative;
   width: 160px;
@@ -667,7 +677,6 @@ button.entry:hover {
   inset: 5px auto 5px 0;
   border-radius: 2px;
   background: var(--forest);
-  opacity: 0.55;
 }
 .bar.sand {
   background: var(--sand);
