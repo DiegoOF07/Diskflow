@@ -7,7 +7,12 @@
 
 DiskFlow es un auditor visual de almacenamiento para espacios de trabajo de desarrollo. Eliges una carpeta y muestra en qué se va el espacio (proyectos, dependencias, artefactos de compilación) con un treemap y una tabla ordenable, **sin modificar nunca tus archivos**.
 
-> **Estado:** desarrollo temprano (`v0.2`). Por ahora solo para Windows 10/11 x64.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/explorer-dark.png">
+  <img src="docs/images/explorer-light.png" alt="El explorador: el treemap de una carpeta de proyectos junto a su tabla, ordenada por tamaño en disco">
+</picture>
+
+> **Estado:** desarrollo temprano (`v0.3`). Por ahora solo para Windows 10/11 x64.
 
 ## Características
 
@@ -20,6 +25,12 @@ DiskFlow es un auditor visual de almacenamiento para espacios de trabajo de desa
 - **Cobertura parcial a la vista.** Las carpetas que no se pudieron leer aparecen con el motivo, así sabes qué dejan fuera los totales. Si un escaneo falla o la unidad de una carpeta está desconectada, el escaneo anterior sigue disponible.
 - **Índice local.** Los resultados se guardan en SQLite, así que puedes explorar el último escaneo sin repetirlo.
 - **Solo lectura por diseño.** DiskFlow nunca borra, mueve ni abre tus archivos, y no hace peticiones de red.
+- **Temas claro y oscuro** que siguen a Windows, y un diseño que se adapta desde la ventana de una laptop pequeña hasta un monitor ancho. El treemap se lee como un mapa: las carpetas son bosque, los archivos arena y las entradas pequeñas se agrupan como terreno rayado.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.png">
+  <img src="docs/images/home-light.png" alt="La pantalla de inicio: cuatro carpetas guardadas con su tamaño, hace cuánto se analizaron y una barra que las compara">
+</picture>
 
 ## Instalación
 
@@ -51,13 +62,12 @@ El índice de escaneos se guarda en `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
 
 - **Los hard links se cuentan una vez por enlace.** Por eso carpetas como `C:\Windows\WinSxS` pueden parecer más grandes que el espacio que ocupan de verdad.
 - Solo se puede analizar una carpeta a la vez.
-- La interfaz está pensada para ventanas de escritorio y aún no se adapta a pantallas pequeñas.
 - Por ahora solo se admite Windows.
 
 ## Hoja de ruta
 
-- **v0.3 (auditor de proyectos):** detectar proyectos (Node, Go, Python, Rust…), clasificar el espacio en categorías como dependencias y artefactos de compilación, y editar exclusiones.
-- **Más adelante:** historial de escaneos y comparaciones, exportación a JSON/CSV, un diseño renovado que se adapte a pantallas más pequeñas e instalador firmado.
+- **v0.4 (auditor de proyectos):** detectar proyectos (Node, Go, Python, Rust…), clasificar el espacio en categorías como dependencias y artefactos de compilación, y editar exclusiones.
+- **Más adelante:** historial de escaneos y comparaciones, exportación a JSON/CSV e instalador firmado.
 
 ## Compilar desde el código
 
@@ -96,8 +106,8 @@ go tool pprof -http=:8080 diskflow-cli.exe cpu.prof   # flame graph en el navega
 Al subir un tag `v*` se ejecuta el workflow `release`, que compila en Windows y publica en GitHub Releases el ejecutable portable, el instalador y `SHA256SUMS.txt`. Los tags con sufijo (`v0.2.0-rc.1`) se publican como *prerelease*.
 
 ```powershell
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 ## Arquitectura
@@ -113,7 +123,7 @@ El motor de escaneo es Go puro, sin dependencias de la interfaz. Wails queda lim
 | `frontend/src/backend/` | La interfaz `Backend` y su implementación sobre Wails |
 | `frontend/src/features/` | Pantallas de la UI (Vue 3 + TypeScript, Vite) |
 | `frontend/wailsjs/` | Bindings generados por Wails (no editar) |
-| `docs/` | Registros de decisiones de arquitectura |
+| `docs/` | Registros de decisiones de arquitectura y las capturas de este README |
 
 **Stack:** Go · Wails v2 · Vue 3 + TypeScript · SQLite (`modernc.org/sqlite`, Go puro) · d3-hierarchy.
 
