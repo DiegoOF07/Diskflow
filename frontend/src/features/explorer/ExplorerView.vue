@@ -635,7 +635,7 @@ tbody tr:focus-visible {
   white-space: nowrap;
 }
 .name {
-  word-break: break-all;
+  overflow-wrap: anywhere; /* breaks inside a word only when no hyphen or space fits */
 }
 .entry {
   display: inline-flex;
@@ -724,13 +724,13 @@ tr:focus-within .actions {
   .col-files {
     display: none;
   }
-}
-@container (max-width: 480px) {
-  .col-date {
-    display: none;
-  }
   .entries .share {
     width: 90px;
+  }
+}
+@container (max-width: 560px) {
+  .col-date {
+    display: none;
   }
 }
 
