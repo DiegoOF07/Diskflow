@@ -62,6 +62,7 @@ ManifestDPIAware true
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
+!insertmacro MUI_UNPAGE_COMPONENTS # Lets the user also remove the saved scans
 !insertmacro MUI_UNPAGE_INSTFILES # Uinstalling page
 
 !insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
@@ -105,7 +106,8 @@ Section
     !insertmacro wails.writeUninstaller
 SectionEnd
 
-Section "uninstall"
+Section "un.DiskFlow"
+    SectionIn RO
     !insertmacro wails.setShellContext
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
@@ -120,3 +122,13 @@ Section "uninstall"
 
     !insertmacro wails.deleteUninstaller
 SectionEnd
+
+# Off by default, and in silent uninstalls, so uninstalling to change versions keeps the catalog.
+Section /o "un.Saved folders and scans" SEC_UN_DATA
+    SetShellVarContext current # the index is in the user's profile, not in the all-users folders
+    RMDir /r "$LOCALAPPDATA\DiskFlow"
+SectionEnd
+
+!insertmacro MUI_UNFUNCTION_DESCRIPTION_BEGIN
+    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_UN_DATA} "Deletes $LOCALAPPDATA\DiskFlow, where DiskFlow keeps the folders you saved and their scans. Leave it unchecked to keep them for a newer version."
+!insertmacro MUI_UNFUNCTION_DESCRIPTION_END

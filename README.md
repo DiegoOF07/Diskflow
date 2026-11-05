@@ -56,7 +56,7 @@ gh attestation verify .\diskflow-<version>-windows-amd64-installer.exe --repo Di
 
 The binaries are not code-signed yet, so Windows SmartScreen will show a warning the first time you run them, and Smart App Control may block the portable executable. If that happens, use the installer.
 
-The scan index is stored in `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
+The saved folders and their scans are stored in `%LOCALAPPDATA%\DiskFlow\diskflow.db`. Uninstalling keeps them, so a newer version finds them again; to delete them too, check **Saved folders and scans** in the uninstaller.
 
 ## Known limitations
 

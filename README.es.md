@@ -56,7 +56,7 @@ gh attestation verify .\diskflow-<versión>-windows-amd64-installer.exe --repo D
 
 Los binarios todavía no están firmados, así que Windows SmartScreen mostrará un aviso la primera vez que los ejecutes, y el Control inteligente de aplicaciones puede bloquear el portable. Si ocurre, usa el instalador.
 
-El índice de escaneos se guarda en `%LOCALAPPDATA%\DiskFlow\diskflow.db`.
+Las carpetas guardadas y sus escaneos se guardan en `%LOCALAPPDATA%\DiskFlow\diskflow.db`. Al desinstalar se conservan, así una versión más nueva los vuelve a encontrar; para borrarlos también, marca **Saved folders and scans** en el desinstalador (el instalador está en inglés).
 
 ## Limitaciones conocidas
 
